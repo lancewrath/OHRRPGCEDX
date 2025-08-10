@@ -923,14 +923,24 @@ namespace OHRRPGCEDX.GameData
                         }
                         
                         // Read map passability
-                        map.Passability = new bool[map.Width, map.Height];
+                        var passability = new bool[map.Width, map.Height];
                         for (int x = 0; x < map.Width; x++)
                         {
                             for (int y = 0; y < map.Height; y++)
                             {
-                                map.Passability[x, y] = reader.ReadBoolean();
+                                passability[x, y] = reader.ReadBoolean();
                             }
                         }
+                        // Convert 2D boolean array to 1D int array
+                        int[] passabilityArray = new int[passability.GetLength(0) * passability.GetLength(1)];
+                        for (int i = 0; i < passability.GetLength(0); i++)
+                        {
+                            for (int j = 0; j < passability.GetLength(1); j++)
+                            {
+                                passabilityArray[i * passability.GetLength(1) + j] = passability[i, j] ? 1 : 0;
+                            }
+                        }
+                        map.Passability = passabilityArray;
                         
                         // Read map NPCs
                         var npcCount = reader.ReadInt32();
@@ -943,7 +953,7 @@ namespace OHRRPGCEDX.GameData
                                 Y = reader.ReadInt32(),
                                 Picture = reader.ReadInt32(),
                                 Palette = reader.ReadInt32(),
-                                MovementType = (MovementType)reader.ReadInt32(),
+                                MovementType = reader.ReadInt32(),
                                 MovementSpeed = reader.ReadInt32(),
                                 Script = reader.ReadInt32().ToString(),
                                 Active = true
@@ -1023,14 +1033,24 @@ namespace OHRRPGCEDX.GameData
                     }
                     
                     // Initialize passability
-                    map.Passability = new bool[map.Width, map.Height];
+                    var passability = new bool[map.Width, map.Height];
                     for (int x = 0; x < map.Width; x++)
                     {
                         for (int y = 0; y < map.Height; y++)
                         {
-                            map.Passability[x, y] = true;
+                            passability[x, y] = true;
                         }
                     }
+                    // Convert 2D boolean array to 1D int array
+                    int[] passabilityArray = new int[passability.GetLength(0) * passability.GetLength(1)];
+                    for (int row = 0; row < passability.GetLength(0); row++)
+                    {
+                        for (int col = 0; col < passability.GetLength(1); col++)
+                        {
+                            passabilityArray[row * passability.GetLength(1) + col] = passability[row, col] ? 1 : 0;
+                        }
+                    }
+                    map.Passability = passabilityArray;
                     
                     // Initialize NPCs and events
                     map.NPCs = new NPCData[0];

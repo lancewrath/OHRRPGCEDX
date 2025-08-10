@@ -120,7 +120,7 @@ namespace OHRRPGCEDX.Audio
                 // Create SharpDX AudioBuffer from our wrapper
                 var sharpDxBuffer = new SharpDX.XAudio2.AudioBuffer
                 {
-                    AudioData = audioBuffer.AudioData,
+                    AudioDataPointer = audioBuffer.AudioData,
                     AudioBytes = audioBuffer.AudioBytes,
                     Flags = audioBuffer.Flags,
                     PlayBegin = audioBuffer.PlayBegin,
@@ -163,7 +163,7 @@ namespace OHRRPGCEDX.Audio
                 // Create SharpDX AudioBuffer from our wrapper
                 var sharpDxBuffer = new SharpDX.XAudio2.AudioBuffer
                 {
-                    AudioData = currentMusic.AudioData,
+                    AudioDataPointer = currentMusic.AudioData,
                     AudioBytes = currentMusic.AudioBytes,
                     Flags = currentMusic.Flags,
                     PlayBegin = currentMusic.PlayBegin,

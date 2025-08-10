@@ -643,10 +643,22 @@ namespace OHRRPGCEDX
         public bool Usable_Out_Of_Battle { get; set; }
         public bool Usable_In_Battle { get; set; }
         public int[] Tags { get; set; }
+        
+        // Additional properties needed by RPGFileLoader
+        public ItemType ItemType { get; set; }
+        public int Price { get; set; }
+        public int UsableBy { get; set; }
+        public ItemEffect Effect { get; set; }
+        public int EffectArg { get; set; }
+        public int EffectArg2 { get; set; }
+        public Stats StatBonus { get; set; }
+        public float[] Elementals { get; set; }
 
         public ItemData()
         {
             Tags = new int[10];
+            StatBonus = new Stats();
+            Elementals = new float[Constants.maxElements - 1];
         }
     }
 
@@ -1094,17 +1106,34 @@ namespace OHRRPGCEDX
         public int Picture { get; set; }
         public int Palette { get; set; }
         public int MP_Cost { get; set; }
+        public int MPCost { get => MP_Cost; set => MP_Cost = value; }  // Alias for compatibility
         public int Power { get; set; }
         public int Element { get; set; }
         public int Target_Type { get; set; }
+        public TargetType TargetType { get => (TargetType)Target_Type; set => Target_Type = (int)value; }  // Alias for compatibility
         public int Script { get; set; }
         public bool Usable_Out_Of_Battle { get; set; }
         public bool Usable_In_Battle { get; set; }
         public int[] Tags { get; set; }
+        
+        // Additional properties from old engine
+        public SpellType SpellType { get; set; }
+        public SpellEffect Effect { get; set; }
+        public int EffectArg { get; set; }
+        public int EffectArg2 { get; set; }
+        public int EffectArg3 { get; set; }
+        public int Accuracy { get; set; }
+        public int CriticalRate { get; set; }
+        public AttackType AttackType { get; set; }
+        public float[] Elementals { get; set; }
+        public int Animation { get; set; }
+        public int SoundEffect { get; set; }
+        public TargetType TargetType { get; set; }
 
         public SpellData()
         {
             Tags = new int[10];
+            Elementals = new float[Constants.maxElements];
         }
     }
 
