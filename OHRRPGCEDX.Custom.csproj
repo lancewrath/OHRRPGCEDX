@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>OHRRPGCEDX.Custom</AssemblyName>
+    <RootNamespace>OHRRPGCEDX.Custom</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpDX" Version="4.2.0" targetFramework="net48" />
+    <PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" targetFramework="net48" />
+    <PackageReference Include="SharpDX.DXGI" Version="4.2.0" targetFramework="net48" />
+    <PackageReference Include="SharpDX.Mathematics" Version="4.2.0" targetFramework="net48" />
+    <PackageReference Include="SharpDX.DirectInput" Version="4.2.0" targetFramework="net48" />
+    <PackageReference Include="SharpDX.XAudio2" Version="4.2.0" targetFramework="net48" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" targetFramework="net48" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Core files -->
+    <Compile Include="Custom.cs" />
+    <Compile Include="DataTypes.cs" />
+    <Compile Include="Constants.cs" />
+    <Compile Include="CommandLineProcessor.cs" />
+    
+    <!-- Graphics system -->
+    <Compile Include="Graphics\GraphicsSystem.cs" />
+    <Compile Include="Graphics\MapRenderer.cs" />
+    <Compile Include="Graphics\Sprite.cs" />
+    <Compile Include="Graphics\GameWindow.cs" />
+    <Compile Include="Graphics\ShaderSystem.cs" />
+    <Compile Include="Graphics\TextureManager.cs" />
+    
+    <!-- Game data system -->
+    <Compile Include="GameData\BattleSystem.cs" />
+    <Compile Include="GameData\RPGFileLoader.cs" />
+    <Compile Include="GameData\SaveLoadSystem.cs" />
+    
+    <!-- Input system -->
+    <Compile Include="Input\InputSystem.cs" />
+    
+    <!-- Audio system -->
+    <Compile Include="Audio\AudioSystem.cs" />
+    
+    <!-- Scripting system -->
+    <Compile Include="Scripting\ScriptEngine.cs" />
+    
+    <!-- UI system -->
+    <Compile Include="UI\MenuSystem.cs" />
+    
+    <!-- Utility systems -->
+    <Compile Include="Utils\LoggingSystem.cs" />
+    <Compile Include="Utils\FileOperations.cs" />
+    
+    <!-- Configuration system -->
+    <Compile Include="Configuration\ConfigurationManager.cs" />
+    
+    <!-- Session management -->
+    <Compile Include="Session\SessionManager.cs" />
+  </ItemGroup>
+
+</Project>
