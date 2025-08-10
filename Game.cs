@@ -52,6 +52,10 @@ namespace OHRRPGCEDX.Game
         private DateTime lastFrameTime;
         private const int TARGET_FPS = 60;
         private const int FRAME_TIME_MS = 1000 / TARGET_FPS;
+        private bool isRendering = false; // Prevent multiple simultaneous renders
+        
+        // Loading timer for state transition
+        private double loadingTimer = 0.0;
         
         public GameRuntime()
         {
@@ -134,9 +138,9 @@ namespace OHRRPGCEDX.Game
             this.MouseUp += OnMouseUp;
             this.MouseMove += OnMouseMove;
             
-            // Set up game timer
+            // Set up game timer - use a slower interval to prevent SharpDX issues
             gameTimer = new Timer();
-            gameTimer.Interval = FRAME_TIME_MS;
+            gameTimer.Interval = 33; // ~30 FPS instead of 60 FPS
             gameTimer.Tick += OnGameTimerTick;
         }
         
@@ -202,9 +206,16 @@ namespace OHRRPGCEDX.Game
         
         private void OnPaint(object sender, PaintEventArgs e)
         {
-            if (graphicsSystem != null && isRunning)
+            // Don't render from paint events - let the game timer handle rendering
+            // This prevents conflicts with the graphics system
+            // Just clear the background to prevent flickering
+            try
             {
-                RenderFrame();
+                e.Graphics.Clear(System.Drawing.Color.Black);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Paint error: {ex.Message}");
             }
         }
         
@@ -236,6 +247,43 @@ namespace OHRRPGCEDX.Game
                     ToggleFullscreen();
                     break;
             }
+            
+            // Test mode switching with number keys (for debugging)
+            switch (e.KeyCode)
+            {
+                case Keys.D1:
+                    currentState = GameState.Loading;
+                    Console.WriteLine("Switched to Loading state");
+                    break;
+                case Keys.D2:
+                    currentState = GameState.MainMenu;
+                    Console.WriteLine("Switched to Main Menu state");
+                    break;
+                case Keys.D3:
+                    currentState = GameState.Playing;
+                    Console.WriteLine("Switched to Playing state");
+                    break;
+                case Keys.D4:
+                    currentState = GameState.Paused;
+                    Console.WriteLine("Switched to Paused state");
+                    break;
+                case Keys.D5:
+                    currentState = GameState.Battle;
+                    Console.WriteLine("Switched to Battle state");
+                    break;
+                case Keys.D6:
+                    currentState = GameState.Menu;
+                    Console.WriteLine("Switched to Menu state");
+                    break;
+                case Keys.D7:
+                    currentState = GameState.Dialog;
+                    Console.WriteLine("Switched to Dialog state");
+                    break;
+                case Keys.D8:
+                    currentState = GameState.GameOver;
+                    Console.WriteLine("Switched to Game Over state");
+                    break;
+            }
         }
         
         private void OnKeyUp(object sender, KeyEventArgs e)
@@ -260,10 +308,30 @@ namespace OHRRPGCEDX.Game
         
         private void OnGameTimerTick(object sender, EventArgs e)
         {
-            if (isRunning)
+            try
             {
-                Update();
-                this.Invalidate(); // Trigger repaint
+                if (isRunning && graphicsSystem != null && graphicsSystem.IsInitialized)
+                {
+                    // Only update if enough time has passed (frame rate limiting)
+                    double currentTime = DateTime.Now.Ticks / TimeSpan.TicksPerSecond;
+                    double deltaTime = currentTime - (lastFrameTime.Ticks / TimeSpan.TicksPerSecond);
+                    
+                    if (deltaTime >= 0.033) // ~30 FPS
+                    {
+                        Update();
+                        lastFrameTime = DateTime.Now;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Game timer tick - isRunning: {isRunning}, graphicsSystem: {graphicsSystem != null}, initialized: {graphicsSystem?.IsInitialized}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Game timer tick error: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                loggingSystem?.Error("Game Runtime", $"Game timer tick error: {ex}");
             }
         }
         
@@ -271,24 +339,24 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
-                DateTime currentTime = DateTime.Now;
-                double deltaTime = (currentTime - lastFrameTime).TotalSeconds;
-                lastFrameTime = currentTime;
-                
-                // Update input system
-                inputSystem?.Update();
-                
+                if (graphicsSystem == null || !graphicsSystem.IsInitialized)
+                {
+                    Console.WriteLine("Warning: Graphics system not available for update");
+                    return;
+                }
+
                 // Update current game state
-                UpdateCurrentState(deltaTime);
+                UpdateCurrentState(0.016); // Use fixed delta time for now
                 
-                // Update audio system
-                // audioSystem?.Update(); // Commented out until AudioSystem.Update is implemented
+                // Render the frame
+                RenderFrame();
                 
-                // Update script engine
-                // scriptEngine?.Update(); // Commented out until ScriptEngine.Update is implemented
+                Console.WriteLine($"Update completed - State: {currentState}");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Update error: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 loggingSystem?.Error("Game Runtime", $"Update error: {ex}");
             }
         }
@@ -297,7 +365,25 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
-                graphicsSystem?.BeginScene();
+                if (graphicsSystem == null || !graphicsSystem.IsInitialized)
+                {
+                    Console.WriteLine("Warning: Graphics system not initialized, skipping render");
+                    return;
+                }
+
+                // Prevent multiple simultaneous renders
+                if (isRendering)
+                {
+                    Console.WriteLine("Warning: Already rendering, skipping frame");
+                    return;
+                }
+
+                isRendering = true;
+
+                // Add a small delay to prevent rapid rendering
+                System.Threading.Thread.Sleep(1);
+
+                graphicsSystem.BeginScene();
                 
                 // Render current game state
                 RenderCurrentState();
@@ -308,12 +394,27 @@ namespace OHRRPGCEDX.Game
                     // menuSystem?.Render(); // Commented out until MenuSystem.Render is implemented
                 }
                 
-                graphicsSystem?.EndScene();
-                graphicsSystem?.Present();
+                graphicsSystem.EndScene();
+                graphicsSystem.Present();
+                
+                Console.WriteLine($"Successfully rendered frame for state: {currentState}");
+            }
+            catch (SharpDX.SharpDXException sdxEx)
+            {
+                Console.WriteLine($"SharpDX render error: {sdxEx.Message}");
+                Console.WriteLine($"Result code: {sdxEx.ResultCode}");
+                Console.WriteLine($"Stack trace: {sdxEx.StackTrace}");
+                loggingSystem?.Error("Game Runtime", $"SharpDX render error: {sdxEx}");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Render error: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 loggingSystem?.Error("Game Runtime", $"Render error: {ex}");
+            }
+            finally
+            {
+                isRendering = false;
             }
         }
         
@@ -390,15 +491,35 @@ namespace OHRRPGCEDX.Game
         {
             // TODO: Implement loading progress
             // For now, just transition to main menu after a short delay
-            if (currentState == GameState.Loading)
+            // Add a small delay to prevent immediate state change
+            loadingTimer += deltaTime;
+            
+            if (currentState == GameState.Loading && loadingTimer > 1.0) // Wait 1 second
             {
                 ShowMainMenu();
+                loadingTimer = 0.0; // Reset timer
             }
         }
         
         private void RenderLoading()
         {
-            // TODO: Render loading screen
+            try
+            {
+                if (graphicsSystem?.IsInitialized == true)
+                {
+                    graphicsSystem.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.2f, 0.2f, 0.2f, 1.0f));
+                    Console.WriteLine("Rendering loading screen...");
+                }
+                else
+                {
+                    Console.WriteLine("Warning: Graphics system not available for loading screen");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Loading screen rendering failed: {ex.Message}");
+                loggingSystem?.Warning("Game Runtime", $"Loading screen rendering failed: {ex.Message}");
+            }
         }
         
         private void ShowMainMenu()
@@ -422,7 +543,23 @@ namespace OHRRPGCEDX.Game
         
         private void RenderMainMenu()
         {
-            // TODO: Render main menu
+            try
+            {
+                if (graphicsSystem?.IsInitialized == true)
+                {
+                    graphicsSystem.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.1f, 0.1f, 0.3f, 1.0f));
+                    Console.WriteLine("Rendering main menu...");
+                }
+                else
+                {
+                    Console.WriteLine("Warning: Graphics system not available for main menu");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Main menu rendering failed: {ex.Message}");
+                loggingSystem?.Warning("Game Runtime", $"Main menu rendering failed: {ex.Message}");
+            }
         }
         
         private void StartNewGame()
@@ -597,6 +734,9 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
+                // Clear with a dark green background for the game world
+                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.1f, 0.3f, 0.1f, 1.0f));
+                
                 // Render map
                 // mapRenderer?.Render(); // Commented out until MapRenderer.Render is implemented
                 
@@ -605,6 +745,8 @@ namespace OHRRPGCEDX.Game
                 
                 // Render NPCs and other entities
                 RenderMapEntities();
+                
+                Console.WriteLine("Rendering game world...");
             }
             catch (Exception ex)
             {
@@ -619,7 +761,16 @@ namespace OHRRPGCEDX.Game
         
         private void RenderMapEntities()
         {
-            // TODO: Render NPCs, events, and other map entities
+            try
+            {
+                // TODO: Render NPCs, events, and other map entities
+                // For now, just log that we're rendering map entities
+                Console.WriteLine("Rendering map entities...");
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Warning("Game Runtime", $"Map entities rendering failed: {ex.Message}");
+            }
         }
         
         private void CheckMapTransitions()
@@ -658,7 +809,16 @@ namespace OHRRPGCEDX.Game
         
         private void RenderPaused()
         {
-            // Render pause menu overlay
+            try
+            {
+                // Render pause menu overlay with a semi-transparent dark overlay
+                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.0f, 0.0f, 0.0f, 0.7f));
+                Console.WriteLine("Rendering pause menu...");
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Warning("Game Runtime", $"Pause menu rendering failed: {ex.Message}");
+            }
         }
         
         private void UpdateBattle(double deltaTime)
@@ -668,7 +828,18 @@ namespace OHRRPGCEDX.Game
         
         private void RenderBattle()
         {
-            // battleSystem?.Render(graphicsSystem); // Commented out until BattleSystem.Render is implemented
+            try
+            {
+                // Clear with a dark red background for battle scenes
+                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.3f, 0.1f, 0.1f, 1.0f));
+                
+                // battleSystem?.Render(graphicsSystem); // Commented out until BattleSystem.Render is implemented
+                Console.WriteLine("Rendering battle scene...");
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Warning("Game Runtime", $"Battle rendering failed: {ex.Message}");
+            }
         }
         
         private void UpdateMenu(double deltaTime)
@@ -678,7 +849,16 @@ namespace OHRRPGCEDX.Game
         
         private void RenderMenu()
         {
-            // Render current menu
+            try
+            {
+                // Clear with a dark blue background for menu screens
+                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.1f, 0.1f, 0.4f, 1.0f));
+                Console.WriteLine("Rendering menu...");
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Warning("Game Runtime", $"Menu rendering failed: {ex.Message}");
+            }
         }
         
         private void UpdateDialog(double deltaTime)
@@ -688,7 +868,16 @@ namespace OHRRPGCEDX.Game
         
         private void RenderDialog()
         {
-            // Render dialog box
+            try
+            {
+                // Clear with a dark purple background for dialog scenes
+                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.2f, 0.1f, 0.3f, 1.0f));
+                Console.WriteLine("Rendering dialog...");
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Warning("Game Runtime", $"Dialog rendering failed: {ex.Message}");
+            }
         }
         
         private void UpdateGameOver(double deltaTime)
@@ -698,7 +887,16 @@ namespace OHRRPGCEDX.Game
         
         private void RenderGameOver()
         {
-            // Render game over screen
+            try
+            {
+                // Clear with a dark gray background for game over screen
+                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.3f, 0.0f, 0.0f, 1.0f));
+                Console.WriteLine("Rendering game over screen...");
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Warning("Game Runtime", $"Game over rendering failed: {ex.Message}");
+            }
         }
         
         // Game utility methods
@@ -874,7 +1072,16 @@ namespace OHRRPGCEDX.Game
         
         public void Render(GraphicsSystem graphicsSystem)
         {
-            // TODO: Implement player rendering
+            try
+            {
+                // TODO: Implement proper player sprite rendering
+                // For now, just log that we're rendering the player
+                Console.WriteLine($"Rendering player at position: {Position}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Player rendering failed: {ex.Message}");
+            }
         }
     }
     
