@@ -886,6 +886,9 @@ namespace OHRRPGCEDX
         public int MaxNameLength { get; set; }
         public bool DefaultAutoBattle { get; set; }
         public bool SkipVictoryDance { get; set; }
+        
+        // Level MP progression
+        public int[] LevelMP { get; set; }
 
         public HeroData()
         {
@@ -901,6 +904,7 @@ namespace OHRRPGCEDX
             ListNames = new string[Constants.maxSpellLists];
             ListTypes = new int[Constants.maxSpellLists];
             Checks = new TagRangeCheck[0];
+            LevelMP = new int[Constants.maxMPLevel];
         }
     }
 
@@ -994,6 +998,7 @@ namespace OHRRPGCEDX
     public class GeneralData
     {
         public string GameTitle { get; set; }
+        public string Title { get; set; }  // Alias for GameTitle for compatibility
         public string Author { get; set; }
         public int StartingMap { get; set; }
         public int StartingX { get; set; }
@@ -1002,6 +1007,24 @@ namespace OHRRPGCEDX
         public int[] StartingHeroes { get; set; }
         public int[] StartingItems { get; set; }
         public int MaxMap { get; set; }
+        
+        // Music settings
+        public int TitleMusic { get; set; }
+        public int VictoryMusic { get; set; }
+        public int BattleMusic { get; set; }
+        
+        // Maximum counts
+        public int MaxHero { get; set; }
+        public int MaxEnemy { get; set; }
+        public int MaxAttack { get; set; }
+        public int MaxTile { get; set; }
+        public int MaxFormation { get; set; }
+        public int MaxPalette { get; set; }
+        public int MaxTextbox { get; set; }
+        
+        // Script settings
+        public int NumPlotScripts { get; set; }
+        public int NewGameScript { get; set; }
 
         public GeneralData()
         {
