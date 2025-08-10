@@ -256,12 +256,86 @@ namespace OHRRPGCEDX.UI
         }
 
         /// <summary>
-        /// Get menu dimensions
+        /// Get the current menu dimensions
         /// </summary>
-        public (int width, int height) GetDimensions()
+        public (int width, int height) GetDimensions() => (menu_width, menu_height);
+
+        /// <summary>
+        /// Render the menu using the graphics system
+        /// </summary>
+        public void Render(GraphicsSystem graphicsSystem)
         {
-            CalculateDimensions();
-            return (menu_width, menu_height);
+            if (graphicsSystem == null || !graphicsSystem.IsInitialized) return;
+
+            try
+            {
+                // Calculate menu dimensions if needed
+                CalculateDimensions();
+
+                // Get screen dimensions
+                int screenWidth = graphicsSystem.ScreenWidth;
+                int screenHeight = graphicsSystem.ScreenHeight;
+
+                // Calculate menu position
+                int menuX = options.centered ? (screenWidth - menu_width) / 2 : 50;
+                int menuY = options.centered ? (screenHeight - menu_height) / 2 : 50;
+
+                // Draw menu background
+                if (options.edged)
+                {
+                    // Draw border around menu
+                    var borderColor = new SharpDX.Color4(0.2f, 0.2f, 0.2f, 1.0f);
+                    var backgroundColor = new SharpDX.Color4(0.1f, 0.1f, 0.1f, 0.8f);
+                    
+                    // Background
+                    graphicsSystem.DrawText("", menuX - 5, menuY - 5, System.Drawing.Color.FromArgb(0, 0, 0, 0));
+                    // This will be replaced with actual rectangle drawing when implemented
+                }
+
+                // Draw menu items
+                int currentY = menuY;
+                for (int i = 0; i < items.Count && i < state.size; i++)
+                {
+                    if (!items[i].visible) continue;
+
+                    var item = items[i];
+                    var textColor = item.enabled ? 
+                        (i == state.pt ? System.Drawing.Color.Yellow : System.Drawing.Color.White) :
+                        System.Drawing.Color.Gray;
+
+                    // Add selection indicator
+                    string displayText = item.text;
+                    if (i == state.pt)
+                    {
+                        displayText = "> " + displayText;
+                    }
+                    else
+                    {
+                        displayText = "  " + displayText;
+                    }
+
+                    // Add item numbers if requested
+                    if (options.show_numbers)
+                    {
+                        displayText = $"{i + 1:00}. {displayText}";
+                    }
+
+                    // Draw the menu item text
+                    graphicsSystem.DrawText(displayText, menuX, currentY, textColor);
+                    currentY += 20; // Line height
+                }
+
+                // Draw cursor if needed
+                if (state.pt < items.Count)
+                {
+                    int cursorY = menuY + (state.pt * 20);
+                    graphicsSystem.DrawText(">", menuX - 20, cursorY, System.Drawing.Color.Yellow);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error rendering menu: {ex.Message}");
+            }
         }
     }
 }

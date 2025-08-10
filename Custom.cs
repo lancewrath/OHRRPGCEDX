@@ -24,21 +24,35 @@ namespace OHRRPGCEDX
         private const string GFX_BACKEND = "sdl2";
         private const string MUSIC_BACKEND = "sdl2";
         
-        // Menu options
+        // Main editor menu options (matching old engine's main_editor_menu)
         private List<string> mainMenuOptions = new List<string>
         {
-            "CREATE NEW GAME",
-            "OPEN EXISTING GAME",
-            "IMPORT GAME",
-            "EXPORT GAME",
-            "GAME SETTINGS",
-            "EDITOR SETTINGS",
-            "ABOUT",
-            "EXIT"
+            "Edit Graphics",
+            "Edit Maps",
+            "Edit Heroes", 
+            "Edit Enemies",
+            "Edit Attacks",
+            "Edit Battle Formations",
+            "Edit Items",
+            "Edit Shops",
+            "Edit Text Boxes",
+            "Edit Tag Names",
+            "Edit Menus",
+            "Edit Slice Collections",
+            "Edit Vehicles",
+            "Import Music",
+            "Import Sound Effects", 
+            "Edit Global Text Strings",
+            "Edit General Game Settings",
+            "Script Management",
+            "Distribute Game",
+            "Test Game",
+            "Quit or Save"
         };
         
         private int selectedMenuIndex = 0;
         private bool isRunning = true;
+        private bool showHelpText = false;
 
         public Custom()
         {
@@ -84,36 +98,46 @@ namespace OHRRPGCEDX
                     this.CreateHandle();
                     loggingSystem.Info("Custom", $"Form handle created: {this.Handle}");
                 }
-                else
-                {
-                    loggingSystem.Info("Custom", $"Form handle already exists: {this.Handle}");
-                }
                 
-                // Initialize graphics system directly on this form
-                loggingSystem.Info("Custom", "Initializing graphics system...");
+                // Initialize graphics system
                 graphicsSystem = new GraphicsSystem();
                 if (!graphicsSystem.Initialize(800, 600, false, true, this.Handle))
                 {
-                    throw new Exception("Failed to initialize graphics system");
+                    loggingSystem.Error("Custom", "Failed to initialize graphics system");
+                    MessageBox.Show("Failed to initialize graphics system", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
                 }
-                loggingSystem.Info("Custom", "Graphics system initialized successfully");
                 
+                // Initialize input system
                 inputSystem = new InputSystem();
                 inputSystem.Initialize();
-                loggingSystem.Info("Custom", "Input system initialized successfully");
                 
+                // Initialize menu system
                 menuSystem = new MenuSystem();
                 menuSystem.Initialize(graphicsSystem);
-                loggingSystem.Info("Custom", "Menu system initialized successfully");
                 
-                loggingSystem.Info("Custom", "Custom Editor initialized successfully");
+                // Set up menu options
+                var menuOptions = new UI.MenuOptions
+                {
+                    edged = true,
+                    centered = true,
+                    show_numbers = true,
+                    max_width = 0
+                };
+                menuSystem.SetOptions(menuOptions);
+                
+                // Add menu items
+                foreach (var option in mainMenuOptions)
+                {
+                    menuSystem.AddItem(option);
+                }
+                
+                loggingSystem.Info("Custom", "All systems initialized successfully");
             }
             catch (Exception ex)
             {
-                loggingSystem?.Error("Custom", $"Failed to initialize systems: {ex.Message}", null, ex);
-                MessageBox.Show($"Failed to initialize systems: {ex.Message}", "Initialization Error", 
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                throw; // Re-throw to prevent the application from continuing with failed systems
+                loggingSystem.Error("Custom", $"Error initializing systems: {ex.Message}");
+                MessageBox.Show($"Error initializing systems: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -128,6 +152,10 @@ namespace OHRRPGCEDX
             {
                 if (isRunning && !this.IsDisposed)
                 {
+                    // Update input system first
+                    if (inputSystem != null)
+                        inputSystem.Update();
+                    
                     RenderMainMenu();
                     ProcessInput();
                 }
@@ -141,160 +169,309 @@ namespace OHRRPGCEDX
 
         private void RenderMainMenu()
         {
-            if (graphicsSystem == null) return;
-            
-            // Clear with a dark blue background instead of black to make it visible
-            graphicsSystem.Clear(Color.DarkBlue);
-            
-            // Draw title
-            string title = "OHRRPGCE CUSTOM EDITOR";
-            graphicsSystem.DrawText(title, 400, 100, Color.White, TextAlignment.Center);
-            
-            // Draw version info at top
-            string versionInfo = $"{VERSION_CODENAME} {VERSION_DATE}.{VERSION_REVISION}";
-            graphicsSystem.DrawText(versionInfo, 400, 130, Color.Gray, TextAlignment.Center);
-            
-            // Draw backend info
-            string backendInfo = $"In use: {GFX_BACKEND}/{MUSIC_BACKEND}";
-            graphicsSystem.DrawText(backendInfo, 400, 150, Color.Gray, TextAlignment.Center);
-            
-            // Draw menu options
-            int startY = 250;
-            for (int i = 0; i < mainMenuOptions.Count; i++)
+            if (graphicsSystem == null || !graphicsSystem.IsInitialized) return;
+
+            try
             {
-                Color textColor = (i == selectedMenuIndex) ? Color.Yellow : Color.White;
-                graphicsSystem.DrawText(mainMenuOptions[i], 400, startY + (i * 40), textColor, TextAlignment.Center);
+                // Clear the screen
+                graphicsSystem.BeginScene();
+                graphicsSystem.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.1f, 0.1f, 0.1f, 1.0f));
+
+                // Draw title
+                string title = $"{SHORT_VERSION} v{VERSION_REVISION} ({VERSION_CODENAME})";
+                string subtitle = $"Built {VERSION_DATE} - {GFX_BACKEND} graphics, {MUSIC_BACKEND} music";
+                
+                // Draw title text
+                graphicsSystem.DrawText(title, 400, 50, System.Drawing.Color.White, Graphics.TextAlignment.Center);
+                graphicsSystem.DrawText(subtitle, 400, 80, System.Drawing.Color.Gray, Graphics.TextAlignment.Center);
+
+                // Render the menu using MenuSystem
+                if (menuSystem != null)
+                {
+                    menuSystem.Render(graphicsSystem);
+                }
+
+                // Draw help text if requested
+                if (showHelpText)
+                {
+                    string helpText = "Use arrow keys to navigate, Enter to select, F1 for help";
+                    graphicsSystem.DrawText(helpText, 400, 550, System.Drawing.Color.Gray, Graphics.TextAlignment.Center);
+                }
+
+                graphicsSystem.EndScene();
+                graphicsSystem.Present();
             }
-            
-            // Draw version at bottom
-            string bottomVersion = $"{SHORT_VERSION} {GFX_BACKEND}/{MUSIC_BACKEND}";
-            graphicsSystem.DrawText(bottomVersion, 400, 500, Color.Gray, TextAlignment.Center);
-            
-            graphicsSystem.Present();
+            catch (Exception ex)
+            {
+                loggingSystem?.Error("Custom", $"Error rendering main menu: {ex.Message}");
+            }
         }
 
         private void ProcessInput()
         {
-            if (inputSystem == null) return;
-            
-            inputSystem.Update();
-            
-            // Handle keyboard input
-            if (inputSystem.IsKeyPressed(Keys.Up))
+            if (inputSystem == null || menuSystem == null) return;
+
+            try
             {
-                selectedMenuIndex = (selectedMenuIndex - 1 + mainMenuOptions.Count) % mainMenuOptions.Count;
-            }
-            else if (inputSystem.IsKeyPressed(Keys.Down))
-            {
-                selectedMenuIndex = (selectedMenuIndex + 1) % mainMenuOptions.Count;
-            }
-            else if (inputSystem.IsKeyPressed(Keys.Enter))
-            {
-                ExecuteMenuSelection();
-            }
-            else if (inputSystem.IsKeyPressed(Keys.Escape))
-            {
-                if (selectedMenuIndex == mainMenuOptions.Count - 1) // EXIT option
+                // Handle input for menu navigation
+                if (inputSystem.IsKeyPressed(Keys.Up))
                 {
-                    isRunning = false;
-                    this.Close();
+                    menuSystem.MoveUp();
                 }
+                else if (inputSystem.IsKeyPressed(Keys.Down))
+                {
+                    menuSystem.MoveDown();
+                }
+                else if (inputSystem.IsKeyPressed(Keys.Left))
+                {
+                    menuSystem.MoveLeft();
+                }
+                else if (inputSystem.IsKeyPressed(Keys.Right))
+                {
+                    menuSystem.MoveRight();
+                }
+                else if (inputSystem.IsKeyPressed(Keys.Enter))
+                {
+                    // Execute the selected menu item
+                    ExecuteMenuSelection();
+                }
+                else if (inputSystem.IsKeyPressed(Keys.Escape))
+                {
+                    // Exit the application
+                    isRunning = false;
+                }
+                else if (inputSystem.IsKeyPressed(Keys.F1))
+                {
+                    // Toggle help text
+                    showHelpText = !showHelpText;
+                }
+
+                // Update the selected menu index to match MenuSystem
+                selectedMenuIndex = menuSystem.GetSelectedIndex();
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Error("Custom", $"Error processing input: {ex.Message}");
             }
         }
 
         private void ExecuteMenuSelection()
         {
-            switch (selectedMenuIndex)
+            if (menuSystem == null) return;
+
+            try
             {
-                case 0: // CREATE NEW GAME
-                    CreateNewGame();
-                    break;
-                case 1: // OPEN EXISTING GAME
-                    OpenExistingGame();
-                    break;
-                case 2: // IMPORT GAME
-                    ImportGame();
-                    break;
-                case 3: // EXPORT GAME
-                    ExportGame();
-                    break;
-                case 4: // GAME SETTINGS
-                    GameSettings();
-                    break;
-                case 5: // EDITOR SETTINGS
-                    EditorSettings();
-                    break;
-                case 6: // ABOUT
-                    ShowAbout();
-                    break;
-                case 7: // EXIT
-                    isRunning = false;
-                    this.Close();
-                    break;
+                var selectedItem = menuSystem.GetSelectedItem();
+                if (selectedItem == null) return;
+
+                int menuIndex = menuSystem.GetSelectedIndex();
+                string selectedOption = selectedItem.text;
+
+                loggingSystem?.Info("Custom", $"Selected menu option: {selectedOption} (index: {menuIndex})");
+
+                // Execute the selected menu option
+                switch (menuIndex)
+                {
+                    case 0: EditGraphics(); break;
+                    case 1: EditMaps(); break;
+                    case 2: EditHeroes(); break;
+                    case 3: EditEnemies(); break;
+                    case 4: EditAttacks(); break;
+                    case 5: EditBattleFormations(); break;
+                    case 6: EditItems(); break;
+                    case 7: EditShops(); break;
+                    case 8: EditTextBoxes(); break;
+                    case 9: EditTagNames(); break;
+                    case 10: EditMenus(); break;
+                    case 11: EditSliceCollections(); break;
+                    case 12: EditVehicles(); break;
+                    case 13: ImportMusic(); break;
+                    case 14: ImportSoundEffects(); break;
+                    case 15: EditGlobalTextStrings(); break;
+                    case 16: EditGeneralGameSettings(); break;
+                    case 17: ScriptManagement(); break;
+                    case 18: DistributeGame(); break;
+                    case 19: TestGame(); break;
+                    case 20: PromptForSaveAndQuit(); break;
+                    default:
+                        loggingSystem?.Warning("Custom", $"Unknown menu option: {selectedOption}");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Error("Custom", $"Error executing menu selection: {ex.Message}");
             }
         }
 
-        private void CreateNewGame()
+        // Menu action methods - these will be implemented as we port each editor
+        private void EditGraphics()
         {
-            loggingSystem?.Info("Custom", "Create New Game selected");
-            // TODO: Implement new game creation
-            MessageBox.Show("Create New Game functionality not yet implemented", "Not Implemented", 
+            loggingSystem?.Info("Custom", "Edit Graphics selected");
+            MessageBox.Show("Edit Graphics functionality not yet implemented", "Not Implemented", 
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void OpenExistingGame()
+        private void EditMaps()
         {
-            loggingSystem?.Info("Custom", "Open Existing Game selected");
-            // TODO: Implement game opening
-            MessageBox.Show("Open Existing Game functionality not yet implemented", "Not Implemented", 
+            loggingSystem?.Info("Custom", "Edit Maps selected");
+            MessageBox.Show("Edit Maps functionality not yet implemented", "Not Implemented", 
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void ImportGame()
+        private void EditHeroes()
         {
-            loggingSystem?.Info("Custom", "Import Game selected");
-            // TODO: Implement game import
-            MessageBox.Show("Import Game functionality not yet implemented", "Not Implemented", 
+            loggingSystem?.Info("Custom", "Edit Heroes selected");
+            MessageBox.Show("Edit Heroes functionality not yet implemented", "Not Implemented", 
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void ExportGame()
+        private void EditEnemies()
         {
-            loggingSystem?.Info("Custom", "Export Game selected");
-            // TODO: Implement game export
-            MessageBox.Show("Export Game functionality not yet implemented", "Not Implemented", 
+            loggingSystem?.Info("Custom", "Edit Enemies selected");
+            MessageBox.Show("Edit Enemies functionality not yet implemented", "Not Implemented", 
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void GameSettings()
+        private void EditAttacks()
         {
-            loggingSystem?.Info("Custom", "Game Settings selected");
-            // TODO: Implement game settings
-            MessageBox.Show("Game Settings functionality not yet implemented", "Not Implemented", 
+            loggingSystem?.Info("Custom", "Edit Attacks selected");
+            MessageBox.Show("Edit Attacks functionality not yet implemented", "Not Implemented", 
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void EditorSettings()
+        private void EditBattleFormations()
         {
-            loggingSystem?.Info("Custom", "Editor Settings selected");
-            // TODO: Implement editor settings
-            MessageBox.Show("Editor Settings functionality not yet implemented", "Not Implemented", 
+            loggingSystem?.Info("Custom", "Edit Battle Formations selected");
+            MessageBox.Show("Edit Battle Formations functionality not yet implemented", "Not Implemented", 
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void ShowAbout()
+        private void EditItems()
         {
-            loggingSystem?.Info("Custom", "About selected");
-            string aboutText = $"OHRRPGCE Custom Editor\n" +
-                             $"Version: {VERSION_CODENAME} {VERSION_DATE}.{VERSION_REVISION}\n" +
-                             $"Graphics Backend: {GFX_BACKEND}\n" +
-                             $"Music Backend: {MUSIC_BACKEND}\n\n" +
-                             $"This is a C# port of the OHRRPGCE engine.\n" +
-                             $"Original engine written in FreeBASIC.\n\n" +
-                             $"Port Status: Work in Progress";
+            loggingSystem?.Info("Custom", "Edit Items selected");
+            MessageBox.Show("Edit Items functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void EditShops()
+        {
+            loggingSystem?.Info("Custom", "Edit Shops selected");
+            MessageBox.Show("Edit Shops functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void EditTextBoxes()
+        {
+            loggingSystem?.Info("Custom", "Edit Text Boxes selected");
+            MessageBox.Show("Edit Text Boxes functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void EditTagNames()
+        {
+            loggingSystem?.Info("Custom", "Edit Tag Names selected");
+            MessageBox.Show("Edit Tag Names functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void EditMenus()
+        {
+            loggingSystem?.Info("Custom", "Edit Menus selected");
+            MessageBox.Show("Edit Menus functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void EditSliceCollections()
+        {
+            loggingSystem?.Info("Custom", "Edit Slice Collections selected");
+            MessageBox.Show("Edit Slice Collections functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void EditVehicles()
+        {
+            loggingSystem?.Info("Custom", "Edit Vehicles selected");
+            MessageBox.Show("Edit Vehicles functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ImportMusic()
+        {
+            loggingSystem?.Info("Custom", "Import Music selected");
+            MessageBox.Show("Import Music functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ImportSoundEffects()
+        {
+            loggingSystem?.Info("Custom", "Import Sound Effects selected");
+            MessageBox.Show("Import Sound Effects functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void EditGlobalTextStrings()
+        {
+            loggingSystem?.Info("Custom", "Edit Global Text Strings selected");
+            MessageBox.Show("Edit Global Text Strings functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void EditGeneralGameSettings()
+        {
+            loggingSystem?.Info("Custom", "Edit General Game Settings selected");
+            MessageBox.Show("Edit General Game Settings functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ScriptManagement()
+        {
+            loggingSystem?.Info("Custom", "Script Management selected");
+            MessageBox.Show("Script Management functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void DistributeGame()
+        {
+            loggingSystem?.Info("Custom", "Distribute Game selected");
+            MessageBox.Show("Distribute Game functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void TestGame()
+        {
+            loggingSystem?.Info("Custom", "Test Game selected");
+            MessageBox.Show("Test Game functionality not yet implemented", "Not Implemented", 
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void PromptForSaveAndQuit()
+        {
+            loggingSystem?.Info("Custom", "Quit or Save selected");
             
-            MessageBox.Show(aboutText, "About OHRRPGCE Custom Editor", 
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            string[] quitOptions = {
+                "Continue editing",
+                "Save changes and continue editing", 
+                "Save changes and quit",
+                "Discard changes and quit"
+            };
+            
+            DialogResult result = MessageBox.Show(
+                "Do you want to save your changes before quitting?",
+                "Save and Quit",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question);
+                
+            if (result == DialogResult.Yes)
+            {
+                // TODO: Implement save functionality
+                loggingSystem?.Info("Custom", "Saving changes before quit");
+                MessageBox.Show("Save functionality not yet implemented", "Not Implemented", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            
+            isRunning = false;
+            this.Close();
         }
 
         private void CleanupSystems()
