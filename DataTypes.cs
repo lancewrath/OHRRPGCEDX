@@ -1128,7 +1128,6 @@ namespace OHRRPGCEDX
         public float[] Elementals { get; set; }
         public int Animation { get; set; }
         public int SoundEffect { get; set; }
-        public TargetType TargetType { get; set; }
 
         public SpellData()
         {
@@ -1172,6 +1171,13 @@ namespace OHRRPGCEDX
         public int SpecificCmdCalls { get; set; }
         public double SpecificCmdTime { get; set; }
 
+        // Additional properties for RPG file loading
+        public string Name { get; set; }
+        public ScriptType Type { get; set; }
+        public byte[] Bytecode { get; set; }
+        public object[] Constants { get; set; }
+        public Dictionary<string, int> Labels { get; set; }
+
         public ScriptData()
         {
             ID = 0;
@@ -1203,6 +1209,13 @@ namespace OHRRPGCEDX
             CmdTime = 0.0;
             SpecificCmdCalls = 0;
             SpecificCmdTime = 0.0;
+
+            // Initialize new properties
+            Name = "";
+            Type = ScriptType.None;
+            Bytecode = new byte[0];
+            Constants = new object[0];
+            Labels = new Dictionary<string, int>();
         }
     }
 
