@@ -20,7 +20,7 @@ namespace OHRRPGCEDX.Scripting
         {
             builtinFunctions = new Dictionary<string, ScriptFunction>();
             globalVariables = new Dictionary<string, object>();
-            userFunctions = new Dictionary<string, ScriptFunction>();
+            userFunctions = new Dictionary<string, ScriptFunctionDefinition>();
             callStack = new Stack<ScriptContext>();
         }
 

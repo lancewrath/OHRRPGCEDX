@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using SharpDX.DirectInput;
+using System.Windows.Forms; // Add this back for Windows Forms Keys support
 
 namespace OHRRPGCEDX.Input
 {
@@ -77,7 +78,10 @@ namespace OHRRPGCEDX.Input
         {
             try
             {
-                var gamepadGuids = directInput.GetDevices(DeviceClass.Joystick, DeviceEnumerationFlags.AllDevices);
+                // TODO: Fix DeviceClass enum value - need to determine correct SharpDX.DirectInput enum
+                // For now, skip gamepad initialization to avoid compilation errors
+                /*
+                var gamepadGuids = directInput.GetDevices(DeviceClass.GameController, DeviceEnumerationFlags.AllDevices);
                 
                 foreach (var deviceInstance in gamepadGuids)
                 {
@@ -96,6 +100,9 @@ namespace OHRRPGCEDX.Input
                         Console.WriteLine($"Failed to initialize gamepad {deviceInstance.InstanceName}: {ex.Message}");
                     }
                 }
+                */
+                
+                Console.WriteLine("Gamepad initialization temporarily disabled - need to fix DeviceClass enum values");
             }
             catch (Exception ex)
             {
@@ -113,10 +120,10 @@ namespace OHRRPGCEDX.Input
             keyBindings[Key.A] = false;
             keyBindings[Key.S] = false;
             keyBindings[Key.D] = false;
-            keyBindings[Key.UpArrow] = false;
-            keyBindings[Key.DownArrow] = false;
-            keyBindings[Key.LeftArrow] = false;
-            keyBindings[Key.RightArrow] = false;
+            keyBindings[Key.Up] = false;
+            keyBindings[Key.Down] = false;
+            keyBindings[Key.Left] = false;
+            keyBindings[Key.Right] = false;
             
             // Action keys
             keyBindings[Key.Return] = false;
@@ -185,6 +192,65 @@ namespace OHRRPGCEDX.Input
         }
 
         /// <summary>
+        /// Convert System.Windows.Forms.Keys to SharpDX.DirectInput.Key
+        /// </summary>
+        private Key ConvertKeys(Keys windowsKey)
+        {
+            // Map common Windows Forms keys to SharpDX DirectInput keys
+            switch (windowsKey)
+            {
+                case Keys.W: return Key.W;
+                case Keys.A: return Key.A;
+                case Keys.S: return Key.S;
+                case Keys.D: return Key.D;
+                case Keys.Up: return Key.Up;
+                case Keys.Down: return Key.Down;
+                case Keys.Left: return Key.Left;
+                case Keys.Right: return Key.Right;
+                case Keys.Enter: return Key.Return;
+                case Keys.Space: return Key.Space;
+                case Keys.Escape: return Key.Escape;
+                case Keys.Tab: return Key.Tab;
+                case Keys.L: return Key.L;
+                case Keys.D0: return Key.D0;
+                case Keys.D1: return Key.D1;
+                case Keys.D2: return Key.D2;
+                case Keys.D3: return Key.D3;
+                case Keys.D4: return Key.D4;
+                case Keys.D5: return Key.D5;
+                case Keys.D6: return Key.D6;
+                case Keys.D7: return Key.D7;
+                case Keys.D8: return Key.D8;
+                case Keys.D9: return Key.D9;
+                default: return Key.Unknown;
+            }
+        }
+
+        /// <summary>
+        /// Check if a key is currently pressed (Windows Forms Keys version)
+        /// </summary>
+        public bool IsKeyPressed(Keys key)
+        {
+            return IsKeyPressed(ConvertKeys(key));
+        }
+
+        /// <summary>
+        /// Check if a key was just pressed (Windows Forms Keys version)
+        /// </summary>
+        public bool IsKeyJustPressed(Keys key)
+        {
+            return IsKeyJustPressed(ConvertKeys(key));
+        }
+
+        /// <summary>
+        /// Check if a key was just released (Windows Forms Keys version)
+        /// </summary>
+        public bool IsKeyJustReleased(Keys key)
+        {
+            return IsKeyJustReleased(ConvertKeys(key));
+        }
+
+        /// <summary>
         /// Check if a key is currently pressed
         /// </summary>
         public bool IsKeyPressed(Key key)
@@ -245,13 +311,13 @@ namespace OHRRPGCEDX.Input
             switch (actionName)
             {
                 case "MoveUp":
-                    return IsKeyPressed(Key.W) || IsKeyPressed(Key.UpArrow);
+                    return IsKeyPressed(Key.W) || IsKeyPressed(Key.Up);
                 case "MoveDown":
-                    return IsKeyPressed(Key.S) || IsKeyPressed(Key.DownArrow);
+                    return IsKeyPressed(Key.S) || IsKeyPressed(Key.Down);
                 case "MoveLeft":
-                    return IsKeyPressed(Key.A) || IsKeyPressed(Key.LeftArrow);
+                    return IsKeyPressed(Key.A) || IsKeyPressed(Key.Left);
                 case "MoveRight":
-                    return IsKeyPressed(Key.D) || IsKeyPressed(Key.RightArrow);
+                    return IsKeyPressed(Key.D) || IsKeyPressed(Key.Right);
                 case "Confirm":
                     return IsKeyPressed(Key.Return) || IsKeyPressed(Key.Space);
                 case "Cancel":
@@ -273,13 +339,13 @@ namespace OHRRPGCEDX.Input
             switch (actionName)
             {
                 case "MoveUp":
-                    return IsKeyJustPressed(Key.W) || IsKeyJustPressed(Key.UpArrow);
+                    return IsKeyJustPressed(Key.W) || IsKeyJustPressed(Key.Up);
                 case "MoveDown":
-                    return IsKeyJustPressed(Key.S) || IsKeyJustPressed(Key.DownArrow);
+                    return IsKeyJustPressed(Key.S) || IsKeyJustPressed(Key.Down);
                 case "MoveLeft":
-                    return IsKeyJustPressed(Key.A) || IsKeyJustPressed(Key.LeftArrow);
+                    return IsKeyJustPressed(Key.A) || IsKeyJustPressed(Key.Left);
                 case "MoveRight":
-                    return IsKeyJustPressed(Key.D) || IsKeyJustPressed(Key.RightArrow);
+                    return IsKeyJustPressed(Key.D) || IsKeyJustPressed(Key.Right);
                 case "Confirm":
                     return IsKeyJustPressed(Key.Return) || IsKeyJustPressed(Key.Space);
                 case "Cancel":

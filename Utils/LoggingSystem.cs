@@ -571,8 +571,8 @@ namespace OHRRPGCEDX.Utils
 
                 stats["TotalEntries"] = _logHistory.Count;
                 stats["LevelCounts"] = levelCounts;
-                stats["OldestEntry"] = _logHistory.Count > 0 ? _logHistory[0].Timestamp : null;
-                stats["NewestEntry"] = _logHistory.Count > 0 ? _logHistory[_logHistory.Count - 1].Timestamp : null;
+                stats["OldestEntry"] = _logHistory.Count > 0 ? _logHistory[0].Timestamp : (DateTime?)null;
+                stats["NewestEntry"] = _logHistory.Count > 0 ? _logHistory[_logHistory.Count - 1].Timestamp : (DateTime?)null;
                 stats["QueueSize"] = _logQueue.Count;
 
                 return stats;
