@@ -731,19 +731,22 @@ namespace OHRRPGCEDX.GameData
                             enemy.Elementals[i] = reader.ReadSingle();
                         }
                         
-                        // Read enemy attacks
+                        // Read enemy attacks (store as attack IDs)
                         var attackCount = reader.ReadInt32();
-                        enemy.Attacks = new EnemyAttack[attackCount];
+                        enemy.Attacks = new int[attackCount];
                         for (int i = 0; i < attackCount; i++)
                         {
-                            enemy.Attacks[i] = new EnemyAttack
-                            {
-                                AttackType = (AttackType)reader.ReadInt32(),
-                                Power = reader.ReadInt32(),
-                                Accuracy = reader.ReadInt32(),
-                                Element = reader.ReadInt32(),
-                                Effect = reader.ReadInt32()
-                            };
+                            // Read attack data but store only the ID
+                            var attackType = reader.ReadInt32();
+                            var power = reader.ReadInt32();
+                            var accuracy = reader.ReadInt32();
+                            var element = reader.ReadInt32();
+                            var effect = reader.ReadInt32();
+                            
+                            // For now, just store the attack index as ID
+                            // In a full implementation, this would create an AttackData object
+                            // and store its ID in the Attacks array
+                            enemy.Attacks[i] = i; // Temporary: store index as ID
                         }
                         
                         enemies.Add(enemy);
@@ -814,17 +817,20 @@ namespace OHRRPGCEDX.GameData
                     }
                     
                     // Initialize attacks (default to 4 attacks)
-                    enemy.Attacks = new EnemyAttack[4];
+                    enemy.Attacks = new int[4];
                     for (int j = 0; j < 4; j++)
                     {
-                        enemy.Attacks[j] = new EnemyAttack
-                        {
-                            AttackType = (AttackType)reader.ReadInt32(),
-                            Power = reader.ReadInt32(),
-                            Accuracy = reader.ReadInt32(),
-                            Element = reader.ReadInt32(),
-                            Effect = reader.ReadInt32()
-                        };
+                        // Read attack data but store only the ID
+                        var attackType = reader.ReadInt32();
+                        var power = reader.ReadInt32();
+                        var accuracy = reader.ReadInt32();
+                        var element = reader.ReadInt32();
+                        var effect = reader.ReadInt32();
+                        
+                        // For now, just store the attack index as ID
+                        // In a full implementation, this would create an AttackData object
+                        // and store its ID in the Attacks array
+                        enemy.Attacks[j] = j; // Temporary: store index as ID
                     }
                     
                     if (!string.IsNullOrEmpty(enemy.Name))
@@ -933,12 +939,14 @@ namespace OHRRPGCEDX.GameData
                         {
                             map.NPCs[i] = new NPCData
                             {
-                                ID = reader.ReadInt32(),
                                 X = reader.ReadInt32(),
                                 Y = reader.ReadInt32(),
-                                Direction = (Direction)reader.ReadInt32(),
-                                Movement = (MovementType)reader.ReadInt32(),
-                                Script = reader.ReadInt32()
+                                Picture = reader.ReadInt32(),
+                                Palette = reader.ReadInt32(),
+                                MovementType = (MovementType)reader.ReadInt32(),
+                                MovementSpeed = reader.ReadInt32(),
+                                Script = reader.ReadInt32().ToString(),
+                                Active = true
                             };
                         }
                         

@@ -843,11 +843,30 @@ namespace OHRRPGCEDX
         public DoorData[] Doors { get; set; }
         public int TilesetId { get; set; }
         public int BackgroundMusic { get; set; }
+        
+        // Additional properties for complex map format
+        public int Layers { get; set; }
+        public int Background { get; set; }
+        public int Music { get; set; }
+        public int[][,] LayerData { get; set; }
+        public MapEvent[] Events { get; set; }
 
         public MapData()
         {
-            NPCs = new NPCData[100];
-            Doors = new DoorData[50];
+            Name = "";
+            Width = 0;
+            Height = 0;
+            Tiles = new int[0];
+            Passability = new int[0];
+            NPCs = new NPCData[0];
+            Doors = new DoorData[0];
+            TilesetId = -1;
+            BackgroundMusic = -1;
+            Layers = 1; // Default to single layer
+            Background = -1;
+            Music = -1;
+            LayerData = new int[1][,]; // Default single layer
+            Events = new MapEvent[0];
         }
     }
 
@@ -953,7 +972,7 @@ namespace OHRRPGCEDX
         public int ExpReward { get; set; }
         public int GoldReward { get; set; }
         public int ItemDrop { get; set; }
-        public int ItemDropChance { get; set; }
+        public float ItemDropChance { get; set; }
         public int[] ElementalCounterAttacks { get; set; }
         public int NonElementalCounterAttack { get; set; }
         public int[] StatCounterAttacks { get; set; }
@@ -990,6 +1009,9 @@ namespace OHRRPGCEDX
         public int CriticalRate { get; set; }
         public int Element { get; set; }
         public int TargetType { get; set; }
+        public AttackType AttackType { get; set; }
+        public int Power { get; set; }
+        public int Effect { get; set; }
     }
 
     /// <summary>
@@ -2170,6 +2192,40 @@ namespace OHRRPGCEDX
             
             for (int i = 0; i < MaxSaveSlots; i++)
                 SaveSlots[i] = new SaveData();
+        }
+    }
+
+    /// <summary>
+    /// Event trigger types for map events
+    /// </summary>
+    public enum EventTrigger
+    {
+        None = 0,
+        OnTouch = 1,
+        OnAction = 2,
+        OnEnter = 3,
+        OnExit = 4,
+        OnTimer = 5
+    }
+
+    /// <summary>
+    /// Map event data
+    /// </summary>
+    public class MapEvent
+    {
+        public int ID { get; set; }
+        public int X { get; set; }
+        public int Y { get; set; }
+        public EventTrigger Trigger { get; set; }
+        public int Script { get; set; }
+
+        public MapEvent()
+        {
+            ID = -1;
+            X = 0;
+            Y = 0;
+            Trigger = EventTrigger.None;
+            Script = -1;
         }
     }
 }

@@ -299,7 +299,7 @@ namespace OHRRPGCEDX.GameData
                                 Mute = 0
                             }
                         },
-                        Level = enemy.Level,
+                        Level = 1, // Enemies don't have levels, use default
                         Ready = false,
                         ReadyMeter = 0,
                         Position = new XYPair(400 + battleSprites.Count * 60, 150),

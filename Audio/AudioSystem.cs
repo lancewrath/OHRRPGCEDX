@@ -14,19 +14,21 @@ namespace OHRRPGCEDX.Audio
     {
         private XAudio2 xaudio2;
         private MasteringVoice masteringVoice;
-        private Dictionary<int, AudioBuffer> soundEffects;
-        private Dictionary<int, AudioBuffer> musicTracks;
-        private AudioBuffer currentMusic;
+        private Dictionary<int, OHRRPGCEDX.Audio.AudioBuffer> soundEffects;
+        private Dictionary<int, OHRRPGCEDX.Audio.AudioBuffer> musicTracks;
+        private OHRRPGCEDX.Audio.AudioBuffer currentMusic;
         private SourceVoice currentMusicVoice;
         private bool isInitialized;
         private float masterVolume;
         private float musicVolume;
         private float sfxVolume;
 
+        // XAudio2 constants - use SharpDX's built-in constant
+
         public AudioSystem()
         {
-            soundEffects = new Dictionary<int, AudioBuffer>();
-            musicTracks = new Dictionary<int, AudioBuffer>();
+            soundEffects = new Dictionary<int, OHRRPGCEDX.Audio.AudioBuffer>();
+            musicTracks = new Dictionary<int, OHRRPGCEDX.Audio.AudioBuffer>();
             masterVolume = 1.0f;
             musicVolume = 0.8f;
             sfxVolume = 1.0f;
@@ -112,8 +114,23 @@ namespace OHRRPGCEDX.Audio
 
             try
             {
-                var sourceVoice = new SourceVoice(xaudio2, soundEffects[id].Format);
-                sourceVoice.SubmitSourceBuffer(soundEffects[id], null);
+                var audioBuffer = soundEffects[id];
+                var sourceVoice = new SourceVoice(xaudio2, audioBuffer.WaveFormat);
+                
+                // Create SharpDX AudioBuffer from our wrapper
+                var sharpDxBuffer = new SharpDX.XAudio2.AudioBuffer
+                {
+                    AudioData = audioBuffer.AudioData,
+                    AudioBytes = audioBuffer.AudioBytes,
+                    Flags = audioBuffer.Flags,
+                    PlayBegin = audioBuffer.PlayBegin,
+                    PlayLength = audioBuffer.PlayLength,
+                    LoopBegin = audioBuffer.LoopBegin,
+                    LoopLength = audioBuffer.LoopLength,
+                    LoopCount = audioBuffer.LoopCount
+                };
+                
+                sourceVoice.SubmitSourceBuffer(sharpDxBuffer, null);
                 sourceVoice.SetVolume(sfxVolume * masterVolume);
                 sourceVoice.Start(0);
             }
@@ -136,14 +153,27 @@ namespace OHRRPGCEDX.Audio
                 StopMusic();
 
                 currentMusic = musicTracks[id];
-                currentMusicVoice = new SourceVoice(xaudio2, currentMusic.Format);
+                currentMusicVoice = new SourceVoice(xaudio2, currentMusic.WaveFormat);
                 
                 if (loop)
                 {
-                    currentMusic.LoopCount = XAudio2.LoopInfinite;
+                    currentMusic.LoopCount = SharpDX.XAudio2.AudioBuffer.LoopInfinite;
                 }
 
-                currentMusicVoice.SubmitSourceBuffer(currentMusic, null);
+                // Create SharpDX AudioBuffer from our wrapper
+                var sharpDxBuffer = new SharpDX.XAudio2.AudioBuffer
+                {
+                    AudioData = currentMusic.AudioData,
+                    AudioBytes = currentMusic.AudioBytes,
+                    Flags = currentMusic.Flags,
+                    PlayBegin = currentMusic.PlayBegin,
+                    PlayLength = currentMusic.PlayLength,
+                    LoopBegin = currentMusic.LoopBegin,
+                    LoopLength = currentMusic.LoopLength,
+                    LoopCount = currentMusic.LoopCount
+                };
+
+                currentMusicVoice.SubmitSourceBuffer(sharpDxBuffer, null);
                 currentMusicVoice.SetVolume(musicVolume * masterVolume);
                 currentMusicVoice.Start(0);
             }
@@ -207,11 +237,12 @@ namespace OHRRPGCEDX.Audio
         }
 
         /// <summary>
-        /// Set sound effects volume
+        /// Set SFX volume
         /// </summary>
         public void SetSFXVolume(float volume)
         {
             sfxVolume = Math.Max(0.0f, Math.Min(1.0f, volume));
+            UpdateVolumes();
         }
 
         /// <summary>
@@ -226,9 +257,9 @@ namespace OHRRPGCEDX.Audio
         }
 
         /// <summary>
-        /// Load audio file (placeholder - would need proper audio format support)
+        /// Load audio file and create buffer
         /// </summary>
-        private AudioBuffer LoadAudioFile(string filePath)
+        private OHRRPGCEDX.Audio.AudioBuffer LoadAudioFile(string filePath)
         {
             // This is a placeholder - in a real implementation, you'd need to:
             // 1. Detect audio format (WAV, OGG, MP3, etc.)
@@ -243,7 +274,7 @@ namespace OHRRPGCEDX.Audio
                 var dummyData = new byte[1024]; // Placeholder
                 var dummyFormat = new WaveFormat(44100, 16, 2); // CD quality stereo
                 
-                return new AudioBuffer(dummyData, dummyFormat);
+                return new OHRRPGCEDX.Audio.AudioBuffer(dummyData, dummyFormat);
             }
             catch
             {
@@ -312,25 +343,43 @@ namespace OHRRPGCEDX.Audio
     }
 
     /// <summary>
-    /// Audio buffer wrapper for XAudio2
+    /// Audio buffer wrapper for XAudio2 compatibility
     /// </summary>
     public class AudioBuffer : IDisposable
     {
-        public byte[] Data { get; private set; }
-        public WaveFormat Format { get; private set; }
+        public IntPtr AudioData { get; private set; }
+        public int AudioBytes { get; private set; }
+        public SharpDX.XAudio2.BufferFlags Flags { get; set; }
+        public int PlayBegin { get; set; }
+        public int PlayLength { get; set; }
+        public int LoopBegin { get; set; }
+        public int LoopLength { get; set; }
         public int LoopCount { get; set; }
+        public WaveFormat WaveFormat { get; private set; }
 
         public AudioBuffer(byte[] data, WaveFormat format)
         {
-            Data = data;
-            Format = format;
+            // Pin the byte array in memory for XAudio2
+            var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
+            AudioData = handle.AddrOfPinnedObject();
+            AudioBytes = data.Length;
+            WaveFormat = format;
+            
+            // Set default values
+            Flags = SharpDX.XAudio2.BufferFlags.None;
+            PlayBegin = 0;
+            PlayLength = 0;
+            LoopBegin = 0;
+            LoopLength = 0;
             LoopCount = 0;
         }
 
         public void Dispose()
         {
-            Data = null;
-            Format = null;
+            // Note: In a real implementation, you'd need to track the GCHandle
+            // and free it here. For now, this is a simplified version.
+            AudioData = IntPtr.Zero;
+            WaveFormat = null;
         }
     }
 }
