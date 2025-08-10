@@ -356,12 +356,16 @@ namespace OHRRPGCEDX.Audio
         public int LoopLength { get; set; }
         public int LoopCount { get; set; }
         public WaveFormat WaveFormat { get; private set; }
+        
+        // Store the GCHandle so we can free it later
+        private GCHandle gcHandle;
+        private bool isDisposed = false;
 
         public AudioBuffer(byte[] data, WaveFormat format)
         {
             // Pin the byte array in memory for XAudio2
-            var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
-            AudioData = handle.AddrOfPinnedObject();
+            gcHandle = GCHandle.Alloc(data, GCHandleType.Pinned);
+            AudioData = gcHandle.AddrOfPinnedObject();
             AudioBytes = data.Length;
             WaveFormat = format;
             
@@ -376,10 +380,29 @@ namespace OHRRPGCEDX.Audio
 
         public void Dispose()
         {
-            // Note: In a real implementation, you'd need to track the GCHandle
-            // and free it here. For now, this is a simplified version.
-            AudioData = IntPtr.Zero;
-            WaveFormat = null;
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!isDisposed && disposing)
+            {
+                // Free the pinned memory
+                if (gcHandle.IsAllocated)
+                {
+                    gcHandle.Free();
+                }
+                
+                AudioData = IntPtr.Zero;
+                WaveFormat = null;
+                isDisposed = true;
+            }
+        }
+
+        ~AudioBuffer()
+        {
+            Dispose(false);
         }
     }
 }
