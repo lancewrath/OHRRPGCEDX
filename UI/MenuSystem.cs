@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OHRRPGCEDX.Graphics;
 
 namespace OHRRPGCEDX.UI
 {
@@ -83,6 +84,16 @@ namespace OHRRPGCEDX.UI
             items = new List<MenuItem>();
             state = new MenuState();
             options = new MenuOptions();
+        }
+
+        /// <summary>
+        /// Initialize the menu system with a graphics system
+        /// </summary>
+        public void Initialize(GraphicsSystem graphicsSystem)
+        {
+            // Store reference to graphics system for rendering
+            // For now, we'll just mark that initialization is complete
+            // TODO: Set up graphics system integration
         }
 
         /// <summary>
