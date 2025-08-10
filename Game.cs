@@ -23,6 +23,8 @@ namespace OHRRPGCEDX.Game
     public class GameRuntime : Form
     {
         private GraphicsSystem graphicsSystem;
+        private ShaderSystem shaderSystem;
+        private TextureManager textureManager;
         private InputSystem inputSystem;
         private AudioSystem audioSystem;
         private ScriptEngine scriptEngine;
@@ -82,10 +84,15 @@ namespace OHRRPGCEDX.Game
                 configManager = ConfigurationManager.Instance;
                 configManager.Initialize();
                 
-                sessionManager = new SessionManager();
+                sessionManager = SessionManager.Instance;
                 
                 graphicsSystem = new GraphicsSystem();
                 graphicsSystem.Initialize(this.Width, this.Height, false, true, this.Handle);
+                
+                            // Initialize shader and texture systems
+            shaderSystem = new ShaderSystem(graphicsSystem.GetDevice());
+            
+            textureManager = new TextureManager(graphicsSystem.GetDevice());
                 
                 inputSystem = new InputSystem();
                 inputSystem.Initialize();
@@ -101,7 +108,9 @@ namespace OHRRPGCEDX.Game
                 rpgLoader = new RPGFileLoader();
                 battleSystem = new BattleSystem();
                 saveLoadSystem = new SaveLoadSystem();
-                mapRenderer = new MapRenderer();
+                
+                // Initialize MapRenderer after graphics system is ready
+                // mapRenderer will be initialized when we have a map to render
                 
                 loggingSystem.Info("Game Runtime", "Game Runtime systems initialized successfully");
             }
@@ -527,8 +536,25 @@ namespace OHRRPGCEDX.Game
                 // Set player position
                 player.Position = new Vector2(0, 0); // Default starting position
                 
-                // Initialize map renderer
-                // mapRenderer?.SetMap(currentMap); // Commented out until MapRenderer.SetMap is implemented
+                // Initialize map renderer with graphics system components
+                if (graphicsSystem != null && currentMap != null && shaderSystem != null && textureManager != null)
+                {
+                    try
+                    {
+                        mapRenderer = new MapRenderer(
+                            graphicsSystem.GetDevice(), 
+                            graphicsSystem.GetDeviceContext(), 
+                            shaderSystem, 
+                            textureManager
+                        );
+                        // mapRenderer?.SetMap(currentMap); // Commented out until MapRenderer.SetMap is implemented
+                    }
+                    catch (Exception ex)
+                    {
+                        loggingSystem?.Warning("Game Runtime", $"Failed to initialize MapRenderer: {ex.Message}");
+                        mapRenderer = null;
+                    }
+                }
                 
                 loggingSystem?.Info("Game Runtime", "New game initialized successfully");
             }
