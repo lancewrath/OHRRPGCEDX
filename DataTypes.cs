@@ -1875,7 +1875,7 @@ namespace OHRRPGCEDX
     /// <summary>
     /// Main container class for all game data
     /// </summary>
-    public class GameData
+    public class RPGData
     {
         // General game information
         public GeneralData General { get; set; }
@@ -1940,7 +1940,7 @@ namespace OHRRPGCEDX
         public int MaxShops { get; set; } = 100;
         public int MaxSaveSlots { get; set; } = 10;
 
-        public GameData()
+        public RPGData()
         {
             // Initialize all arrays with default sizes
             Heroes = new HeroData[MaxHeroes];

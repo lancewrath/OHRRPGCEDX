@@ -41,7 +41,7 @@ namespace OHRRPGCEDX.Game
         // Game state
         private GameState currentState = GameState.Loading;
         private string currentRPGPath = "";
-        private GameData currentGameData;
+        private RPGData currentGameData;
         private Player player;
         private Map currentMap;
         private bool gamePaused = false;

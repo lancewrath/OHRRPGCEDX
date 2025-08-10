@@ -66,16 +66,16 @@ namespace OHRRPGCEDX.GameData
         }
 
         /// <summary>
-        /// Load all game data and return a GameData object
+        /// Load all game data and return a RPGData object
         /// </summary>
-        public GameData LoadGameData(string path)
+        public RPGData LoadGameData(string path)
         {
             if (!LoadRPG(path))
             {
                 return null;
             }
 
-            var gameData = new GameData
+            var gameData = new RPGData
             {
                 General = LoadGeneralData(),
                 Heroes = LoadHeroData(),
