@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
 using SharpDX.DirectInput;
 
 namespace OHRRPGCEDX.Input
@@ -24,7 +23,7 @@ namespace OHRRPGCEDX.Input
         private List<JoystickState> previousGamepadStates;
         
         private bool isInitialized;
-        private Dictionary<Keys, bool> keyBindings;
+        private Dictionary<Key, bool> keyBindings;
         private Dictionary<string, int> actionBindings;
 
         public InputSystem()
@@ -32,7 +31,7 @@ namespace OHRRPGCEDX.Input
             gamepads = new List<Joystick>();
             currentGamepadStates = new List<JoystickState>();
             previousGamepadStates = new List<JoystickState>();
-            keyBindings = new Dictionary<Keys, bool>();
+            keyBindings = new Dictionary<Key, bool>();
             actionBindings = new Dictionary<string, int>();
         }
 
@@ -78,7 +77,7 @@ namespace OHRRPGCEDX.Input
         {
             try
             {
-                var gamepadGuids = directInput.GetDevices(DeviceClass.GameController, DeviceEnumerationFlags.AllDevices);
+                var gamepadGuids = directInput.GetDevices(DeviceClass.Joystick, DeviceEnumerationFlags.AllDevices);
                 
                 foreach (var deviceInstance in gamepadGuids)
                 {
@@ -110,25 +109,25 @@ namespace OHRRPGCEDX.Input
         private void SetupDefaultKeyBindings()
         {
             // Movement keys
-            keyBindings[Keys.W] = false;
-            keyBindings[Keys.A] = false;
-            keyBindings[Keys.S] = false;
-            keyBindings[Keys.D] = false;
-            keyBindings[Keys.Up] = false;
-            keyBindings[Keys.Down] = false;
-            keyBindings[Keys.Left] = false;
-            keyBindings[Keys.Right] = false;
+            keyBindings[Key.W] = false;
+            keyBindings[Key.A] = false;
+            keyBindings[Key.S] = false;
+            keyBindings[Key.D] = false;
+            keyBindings[Key.UpArrow] = false;
+            keyBindings[Key.DownArrow] = false;
+            keyBindings[Key.LeftArrow] = false;
+            keyBindings[Key.RightArrow] = false;
             
             // Action keys
-            keyBindings[Keys.Enter] = false;
-            keyBindings[Keys.Space] = false;
-            keyBindings[Keys.Escape] = false;
-            keyBindings[Keys.Tab] = false;
+            keyBindings[Key.Return] = false;
+            keyBindings[Key.Space] = false;
+            keyBindings[Key.Escape] = false;
+            keyBindings[Key.Tab] = false;
             
             // Number keys for menu selection
             for (int i = 0; i < 10; i++)
             {
-                keyBindings[Keys.D0 + i] = false;
+                keyBindings[Key.D0 + i] = false;
             }
             
             // Action bindings
@@ -188,7 +187,7 @@ namespace OHRRPGCEDX.Input
         /// <summary>
         /// Check if a key is currently pressed
         /// </summary>
-        public bool IsKeyPressed(Keys key)
+        public bool IsKeyPressed(Key key)
         {
             if (!isInitialized) return false;
             
@@ -205,7 +204,7 @@ namespace OHRRPGCEDX.Input
         /// <summary>
         /// Check if a key was just pressed this frame
         /// </summary>
-        public bool IsKeyJustPressed(Keys key)
+        public bool IsKeyJustPressed(Key key)
         {
             if (!isInitialized) return false;
             
@@ -222,7 +221,7 @@ namespace OHRRPGCEDX.Input
         /// <summary>
         /// Check if a key was just released this frame
         /// </summary>
-        public bool IsKeyJustReleased(Keys key)
+        public bool IsKeyJustReleased(Key key)
         {
             if (!isInitialized) return false;
             
@@ -246,19 +245,19 @@ namespace OHRRPGCEDX.Input
             switch (actionName)
             {
                 case "MoveUp":
-                    return IsKeyPressed(Keys.W) || IsKeyPressed(Keys.Up);
+                    return IsKeyPressed(Key.W) || IsKeyPressed(Key.UpArrow);
                 case "MoveDown":
-                    return IsKeyPressed(Keys.S) || IsKeyPressed(Keys.Down);
+                    return IsKeyPressed(Key.S) || IsKeyPressed(Key.DownArrow);
                 case "MoveLeft":
-                    return IsKeyPressed(Keys.A) || IsKeyPressed(Keys.Left);
+                    return IsKeyPressed(Key.A) || IsKeyPressed(Key.LeftArrow);
                 case "MoveRight":
-                    return IsKeyPressed(Keys.D) || IsKeyPressed(Keys.Right);
+                    return IsKeyPressed(Key.D) || IsKeyPressed(Key.RightArrow);
                 case "Confirm":
-                    return IsKeyPressed(Keys.Enter) || IsKeyPressed(Keys.Space);
+                    return IsKeyPressed(Key.Return) || IsKeyPressed(Key.Space);
                 case "Cancel":
-                    return IsKeyPressed(Keys.Escape);
+                    return IsKeyPressed(Key.Escape);
                 case "Menu":
-                    return IsKeyPressed(Keys.Tab);
+                    return IsKeyPressed(Key.Tab);
                 default:
                     return false;
             }
@@ -274,19 +273,19 @@ namespace OHRRPGCEDX.Input
             switch (actionName)
             {
                 case "MoveUp":
-                    return IsKeyJustPressed(Keys.W) || IsKeyJustPressed(Keys.Up);
+                    return IsKeyJustPressed(Key.W) || IsKeyJustPressed(Key.UpArrow);
                 case "MoveDown":
-                    return IsKeyJustPressed(Keys.S) || IsKeyJustPressed(Keys.Down);
+                    return IsKeyJustPressed(Key.S) || IsKeyJustPressed(Key.DownArrow);
                 case "MoveLeft":
-                    return IsKeyJustPressed(Keys.A) || IsKeyJustPressed(Keys.Left);
+                    return IsKeyJustPressed(Key.A) || IsKeyJustPressed(Key.LeftArrow);
                 case "MoveRight":
-                    return IsKeyJustPressed(Keys.D) || IsKeyJustPressed(Keys.Right);
+                    return IsKeyJustPressed(Key.D) || IsKeyJustPressed(Key.RightArrow);
                 case "Confirm":
-                    return IsKeyJustPressed(Keys.Enter) || IsKeyJustPressed(Keys.Space);
+                    return IsKeyJustPressed(Key.Return) || IsKeyJustPressed(Key.Space);
                 case "Cancel":
-                    return IsKeyJustPressed(Keys.Escape);
+                    return IsKeyJustPressed(Key.Escape);
                 case "Menu":
-                    return IsKeyJustPressed(Keys.Tab);
+                    return IsKeyJustPressed(Key.Tab);
                 default:
                     return false;
             }

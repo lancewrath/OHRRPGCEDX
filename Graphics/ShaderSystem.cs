@@ -3,12 +3,13 @@ using System.IO;
 using System.Text;
 using SharpDX;
 using SharpDX.Direct3D11;
+using SharpDX.DXGI;
 
 namespace OHRRPGCEDX.Graphics
 {
     public class ShaderSystem : IDisposable
     {
-        private Device device;
+        private SharpDX.Direct3D11.Device device;
         private bool isDisposed = false;
 
         // Shader resources
@@ -22,7 +23,7 @@ namespace OHRRPGCEDX.Graphics
         private PixelShader tilePixelShader;
         private InputLayout tileInputLayout;
 
-        public ShaderSystem(Device device)
+        public ShaderSystem(SharpDX.Direct3D11.Device device)
         {
             this.device = device ?? throw new ArgumentNullException(nameof(device));
             InitializeDefaultShaders();
@@ -77,7 +78,7 @@ namespace OHRRPGCEDX.Graphics
                 var inputElements = new InputElement[]
                 {
                     new InputElement("POSITION", 0, Format.R32G32B32_Float, 0, 0),
-                    new InputElement("COLOR", 0, Format.R32G32B32A8_Float, 12, 0)
+                    new InputElement("COLOR", 0, Format.R32G32B32A32_Float, 12, 0)
                 };
                 
                 defaultInputLayout = new InputLayout(device, vertexShaderCode, inputElements);

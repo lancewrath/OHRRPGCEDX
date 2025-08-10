@@ -55,7 +55,7 @@ namespace OHRRPGCEDX.Graphics
                 throw new ArgumentException("Data cannot be null or empty.", nameof(data));
 
             if (width <= 0 || height <= 0)
-                throw new ArgumentException("Width and height must be positive.", nameof(width), nameof(height));
+                throw new ArgumentException("Width and height must be positive.", nameof(width));
 
             try
             {
@@ -73,7 +73,7 @@ namespace OHRRPGCEDX.Graphics
                     SampleDescription = new SampleDescription(1, 0)
                 });
 
-                var dataBox = device.ImmediateContext.MapSubresource(texture2D, 0, MapMode.WriteDiscard, MapFlags.None);
+                var dataBox = device.ImmediateContext.MapSubresource(texture2D, 0, MapMode.WriteDiscard, SharpDX.Direct3D11.MapFlags.None);
                 
                 // Copy the data to the texture
                 // Note: This is a simplified implementation - you might need to handle different pixel formats

@@ -182,7 +182,8 @@ namespace OHRRPGCEDX
         RGB = 1,
         RGBA = 2,
         Indexed = 3,
-        Grayscale = 4
+        Indexed8 = 4,
+        Grayscale = 5
     }
 
     /// <summary>
@@ -1224,17 +1225,29 @@ namespace OHRRPGCEDX
     /// </summary>
     public class TextureData
     {
+        public int ID { get; set; }
         public string Name { get; set; }
         public string Filename { get; set; }
         public int Width { get; set; }
         public int Height { get; set; }
-        public int[] Data { get; set; }
-        public int[] Palette { get; set; }
+        public TextureFormat Format { get; set; }
+        public int Palette { get; set; }
+        public byte[] PixelData { get; set; }
+        public byte[] PaletteData { get; set; }
+        public Dictionary<string, string> Metadata { get; set; }
 
         public TextureData()
         {
-            Data = new int[0];
-            Palette = new int[256];
+            ID = 0;
+            Name = "";
+            Filename = "";
+            Width = 0;
+            Height = 0;
+            Format = TextureFormat.None;
+            Palette = 0;
+            PixelData = new byte[0];
+            PaletteData = new byte[0];
+            Metadata = new Dictionary<string, string>();
         }
     }
 
@@ -1243,13 +1256,40 @@ namespace OHRRPGCEDX
     /// </summary>
     public class AudioData
     {
+        public int ID { get; set; }
         public string Name { get; set; }
         public string Filename { get; set; }
+        public AudioType Type { get; set; }
+        public AudioFormat Format { get; set; }
+        public int SampleRate { get; set; }
+        public int Channels { get; set; }
+        public int BitDepth { get; set; }
         public int Volume { get; set; }
         public int Pan { get; set; }
         public bool Loop { get; set; }
         public int Loop_Start { get; set; }
         public int Loop_End { get; set; }
+                            public byte[] RawAudioData { get; set; }
+        public Dictionary<string, string> Metadata { get; set; }
+
+        public AudioData()
+        {
+            ID = 0;
+            Name = "";
+            Filename = "";
+            Type = AudioType.None;
+            Format = AudioFormat.None;
+            SampleRate = 44100;
+            Channels = 2;
+            BitDepth = 16;
+            Volume = 100;
+            Pan = 0;
+            Loop = false;
+            Loop_Start = 0;
+            Loop_End = 0;
+                                    RawAudioData = new byte[0];
+            Metadata = new Dictionary<string, string>();
+        }
     }
 
     /// <summary>
@@ -1409,8 +1449,11 @@ namespace OHRRPGCEDX
         public int ID { get; set; }
         public string Name { get; set; }
         public DateTime Timestamp { get; set; }
+        public DateTime SaveDate { get; set; }
         public int GameVersion { get; set; }
+        public string Version { get; set; }
         public PlayerData PlayerData { get; set; }
+        public GameState GameState { get; set; }
         public Dictionary<string, bool> GameFlags { get; set; }
 
         public SaveData()

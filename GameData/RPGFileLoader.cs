@@ -1775,8 +1775,8 @@ namespace OHRRPGCEDX.GameData
                         
                         // Read audio data
                         var audioDataSize = reader.ReadInt32();
-                        audio.AudioData = new byte[audioDataSize];
-                        reader.Read(audio.AudioData, 0, audioDataSize);
+                        audio.RawAudioData = new byte[audioDataSize];
+                        reader.Read(audio.RawAudioData, 0, audioDataSize);
                         
                         // Read audio metadata
                         var metadataCount = reader.ReadInt32();
@@ -1827,7 +1827,7 @@ namespace OHRRPGCEDX.GameData
                     audio.BitDepth = reader.ReadInt32();
                     
                     // Initialize with empty data for old format
-                    audio.AudioData = new byte[0];
+                                            audio.RawAudioData = new byte[0];
                     audio.Metadata = new Dictionary<string, string>();
                     
                     if (!string.IsNullOrEmpty(audio.Name))
