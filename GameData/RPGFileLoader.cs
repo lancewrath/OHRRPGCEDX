@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Linq;
 
 namespace OHRRPGCEDX.GameData
 {
@@ -247,9 +248,13 @@ namespace OHRRPGCEDX.GameData
                     if (string.IsNullOrEmpty(lumpName))
                         break; // End of lumps
 
-                    // Read lump size (4 bytes, little-endian)
-                    var lumpSizeBytes = reader.ReadBytes(4);
-                    var lumpSize = BitConverter.ToInt32(lumpSizeBytes, 0);
+                    // Read lump size (4 bytes, PDP-endian byte order = 3,4,1,2)
+                    var byte1 = reader.ReadByte(); // Byte 1 -> bits 16-23
+                    var byte2 = reader.ReadByte(); // Byte 2 -> bits 24-31
+                    var byte3 = reader.ReadByte(); // Byte 3 -> bits 0-7
+                    var byte4 = reader.ReadByte(); // Byte 4 -> bits 8-15
+                    
+                    var lumpSize = (byte1 << 16) | (byte2 << 24) | byte3 | (byte4 << 8);
 
                     if (lumpSize < 0 || lumpSize > stream.Length || stream.Position + lumpSize > stream.Length)
                     {
@@ -312,6 +317,32 @@ namespace OHRRPGCEDX.GameData
         }
 
         /// <summary>
+        /// Get the project name from the RPG file or directory
+        /// </summary>
+        private string GetProjectName()
+        {
+            if (string.IsNullOrEmpty(rpgPath))
+                return "GAME";
+                
+            var fileName = Path.GetFileNameWithoutExtension(rpgPath);
+            if (string.IsNullOrEmpty(fileName))
+                fileName = Path.GetFileName(rpgPath);
+                
+            // For old engine format, the project name is usually the filename without extension
+            // But some games use "GAME" as the default project name
+            // Special case: vikings.rpg uses "VIKING" (singular) not "VIKINGS" (plural)
+            var projectName = fileName.ToUpper();
+            if (projectName == "VIKINGS")
+            {
+                projectName = "VIKING";
+            }
+            
+            OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Project Detection", $"GetProjectName: Detected project name: '{projectName}' from path: '{rpgPath}'");
+            
+            return projectName;
+        }
+
+        /// <summary>
         /// Get a lump as text
         /// </summary>
         public string GetLumpAsText(string lumpName)
@@ -355,10 +386,18 @@ namespace OHRRPGCEDX.GameData
         /// </summary>
         public GeneralData LoadGeneralData()
         {
+            // Try to find the project name from loaded lumps
+            var projectName = GetProjectName();
+            
             var data = GetLump("general.reld");
             if (data == null)
             {
-                // Try old format
+                // Try old format with project name
+                data = GetLump(projectName + ".GEN");
+            }
+            if (data == null)
+            {
+                // Try generic old format
                 data = GetLump(".GEN");
             }
 
@@ -470,47 +509,50 @@ namespace OHRRPGCEDX.GameData
                 using (var reader = new BinaryReader(stream))
                 {
                     // Old format has fixed offsets
+                    // Based on oldengine/loading.rbas, most values are 16-bit
                     stream.Position = Constants.genTitle;
                     general.Title = ReadFixedString(reader, 32);
                     
                     stream.Position = Constants.genTitleMus;
-                    general.TitleMusic = reader.ReadInt32();
+                    general.TitleMusic = reader.ReadInt16();
                     
                     stream.Position = Constants.genVictMus;
-                    general.VictoryMusic = reader.ReadInt32();
+                    general.VictoryMusic = reader.ReadInt16();
                     
                     stream.Position = Constants.genBatMus;
-                    general.BattleMusic = reader.ReadInt32();
+                    general.BattleMusic = reader.ReadInt16();
                     
                     stream.Position = Constants.genMaxHero;
-                    general.MaxHero = reader.ReadInt32();
+                    general.MaxHero = reader.ReadInt16();
                     
                     stream.Position = Constants.genMaxEnemy;
-                    general.MaxEnemy = reader.ReadInt32();
+                    general.MaxEnemy = reader.ReadInt16();
                     
                     stream.Position = Constants.genMaxMap;
-                    general.MaxMap = reader.ReadInt32();
+                    general.MaxMap = reader.ReadInt16();
                     
                     stream.Position = Constants.genMaxAttack;
-                    general.MaxAttack = reader.ReadInt32();
+                    general.MaxAttack = reader.ReadInt16();
                     
                     stream.Position = Constants.genMaxTile;
-                    general.MaxTile = reader.ReadInt32();
+                    general.MaxTile = reader.ReadInt16();
                     
                     stream.Position = Constants.genMaxFormation;
-                    general.MaxFormation = reader.ReadInt32();
+                    general.MaxFormation = reader.ReadInt16();
                     
                     stream.Position = Constants.genMaxPal;
-                    general.MaxPalette = reader.ReadInt32();
+                    general.MaxPalette = reader.ReadInt16();
                     
                     stream.Position = Constants.genMaxTextbox;
-                    general.MaxTextbox = reader.ReadInt32();
+                    general.MaxTextbox = reader.ReadInt16();
                     
                     stream.Position = Constants.genNumPlotscripts;
-                    general.NumPlotScripts = reader.ReadInt32();
+                    general.NumPlotScripts = reader.ReadInt16();
                     
                     stream.Position = Constants.genNewGameScript;
-                    general.NewGameScript = reader.ReadInt32();
+                    general.NewGameScript = reader.ReadInt16();
+                    
+                    Console.WriteLine($"General data: Title='{general.Title}', MaxHero={general.MaxHero}, MaxMap={general.MaxMap}");
                 }
             }
             catch (Exception ex)
@@ -524,14 +566,37 @@ namespace OHRRPGCEDX.GameData
         /// </summary>
         public HeroData[] LoadHeroData()
         {
+            // Try to find the project name from loaded lumps
+            var projectName = GetProjectName();
+            Console.WriteLine($"Loading hero data, project name: {projectName}");
+            
             var data = GetLump("heroes.reld");
             if (data == null)
             {
-                // Try old format
+                Console.WriteLine("heroes.reld not found, trying old format...");
+                // Try old format with project name
+                data = GetLump(projectName + ".HSP");
+            }
+            if (data == null)
+            {
+                Console.WriteLine($"{projectName}.HSP not found, trying generic old format...");
+                // Try generic old format
                 data = GetLump(".DT2");
             }
+            if (data == null)
+            {
+                Console.WriteLine(".DT2 not found, trying DT0...");
+                // Try DT0 (hero data in old format)
+                data = GetLump(projectName + ".DT0");
+            }
 
-            if (data == null) return null;
+            if (data == null)
+            {
+                Console.WriteLine("No hero data found in any format");
+                return null;
+            }
+
+            Console.WriteLine($"Found hero data lump, size: {data.Length} bytes");
 
             try
             {
@@ -539,13 +604,16 @@ namespace OHRRPGCEDX.GameData
                 
                 if (data.Length > 4 && Encoding.ASCII.GetString(data, 0, 4) == "RELD")
                 {
+                    Console.WriteLine("Parsing hero data as RELD format");
                     ParseHeroRelDFormat(data, heroes);
                 }
                 else
                 {
+                    Console.WriteLine("Parsing hero data as old binary format");
                     ParseHeroOldBinaryFormat(data, heroes);
                 }
 
+                Console.WriteLine($"Hero parsing complete, found {heroes.Count} heroes");
                 return heroes.ToArray();
             }
             catch (Exception ex)
@@ -646,66 +714,89 @@ namespace OHRRPGCEDX.GameData
             using (var reader = new BinaryReader(stream))
             {
                 // Old format has fixed hero records
+                // Based on oldengine/loading.rbas, each hero record is approximately 256 bytes
                 var heroSize = 256; // Approximate size per hero
                 var heroCount = data.Length / heroSize;
+                
+                Console.WriteLine($"Parsing {heroCount} heroes from old binary format (data size: {data.Length})");
                 
                 for (int i = 0; i < heroCount; i++)
                 {
                     var hero = new HeroData();
                     
-                    // Read hero name (32 bytes)
-                    hero.Name = ReadFixedString(reader, 32).Trim('\0');
+                    // Read hero name (16 bytes, variable length string)
+                    hero.Name = ReadFixedString(reader, 16).Trim('\0');
                     
-                    // Skip to stats section
-                    stream.Position += 32;
+                    // Read sprite and palette (16-bit values)
+                    hero.Picture = reader.ReadInt16();
+                    hero.Palette = reader.ReadInt16();
                     
-                    // Read base stats
+                    // Read walk sprite and palette (16-bit values)
+                    var walkSprite = reader.ReadInt16();
+                    var walkSpritePal = reader.ReadInt16();
+                    
+                    // Read default level and weapon (16-bit values)
+                    var defLevel = reader.ReadInt16();
+                    var defWeapon = reader.ReadInt16();
+                    
+                    // Read base stats (16-bit values)
                     hero.BaseStats = new Stats
                     {
-                        HP = reader.ReadInt32(),
-                        MP = reader.ReadInt32(),
-                        Attack = reader.ReadInt32(),
-                        Defense = reader.ReadInt32(),
-                        Speed = reader.ReadInt32(),
-                        Magic = reader.ReadInt32(),
-                        MagicDef = reader.ReadInt32(),
-                        Luck = reader.ReadInt32()
+                        HP = reader.ReadInt16(),
+                        MP = reader.ReadInt16(),
+                        Attack = reader.ReadInt16(),
+                        Defense = reader.ReadInt16(),
+                        Speed = reader.ReadInt16(),
+                        Magic = reader.ReadInt16(),
+                        MagicDef = reader.ReadInt16(),
+                        Luck = reader.ReadInt16()
                     };
                     
-                    // Read picture and palette
-                    hero.Picture = reader.ReadInt32();
-                    hero.Palette = reader.ReadInt32();
-                    hero.Portrait = reader.ReadInt32();
-                    hero.PortraitPalette = reader.ReadInt32();
+                    // Skip spell lists (4 * 24 * 2 = 192 bytes)
+                    stream.Position += 192;
                     
-                    // Initialize arrays
-                    hero.LevelMP = new int[Constants.maxMPLevel];
-                    hero.Elementals = new float[Constants.maxElements - 1];
+                    // Read portrait and palette (16-bit values)
+                    hero.Portrait = reader.ReadInt16();
+                    var portraitPal = reader.ReadInt16();
+                    
+                    // Skip bits and list names (3 * 2 + 4 * 10 = 46 bytes)
+                    stream.Position += 46;
+                    
+                    // Read portrait palette (16-bit value)
+                    var portraitPal2 = reader.ReadInt16();
+                    
+                    // Skip list types (4 * 2 = 8 bytes)
+                    stream.Position += 8;
+                    
+                    // Read tags (16-bit values)
+                    var haveTag = reader.ReadInt16();
+                    var aliveTag = reader.ReadInt16();
+                    var leaderTag = reader.ReadInt16();
+                    var activeTag = reader.ReadInt16();
+                    var maxNameLen = reader.ReadInt16();
+                    
+                    // Read hand positions (2 * 2 * 2 = 8 bytes)
                     hero.HandPositions = new XYPair[2];
-                    
-                    // Read level MP data
-                    for (int j = 0; j < Constants.maxMPLevel; j++)
+                    for (int j = 0; j < 2; j++)
                     {
-                        hero.LevelMP[j] = reader.ReadInt32();
+                        hero.HandPositions[j] = new XYPair(reader.ReadInt16(), reader.ReadInt16());
                     }
                     
-                    // Read elemental resistances
+                    // Read elemental resistances (float values)
+                    hero.Elementals = new float[Constants.maxElements - 1];
                     for (int j = 0; j < Constants.maxElements - 1; j++)
                     {
                         hero.Elementals[j] = reader.ReadSingle();
                     }
                     
-                    // Read hand positions
-                    for (int j = 0; j < 2; j++)
-                    {
-                        hero.HandPositions[j] = new XYPair(reader.ReadInt32(), reader.ReadInt32());
-                    }
-                    
                     if (!string.IsNullOrEmpty(hero.Name))
                     {
+                        Console.WriteLine($"  Hero {i}: {hero.Name}, HP: {hero.BaseStats.HP}, MP: {hero.BaseStats.MP}");
                         heroes.Add(hero);
                     }
                 }
+                
+                Console.WriteLine($"Successfully parsed {heroes.Count} heroes");
             }
         }
 
@@ -926,14 +1017,32 @@ namespace OHRRPGCEDX.GameData
         /// </summary>
         public MapData[] LoadMapData()
         {
+            // Try to find the project name from loaded lumps
+            var projectName = GetProjectName();
+            
+            OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"LoadMapData: Looking for map data with project name: {projectName}");
+            
             var data = GetLump("maps.reld");
             if (data == null)
             {
-                // Try old format
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", "LoadMapData: maps.reld not found, trying old format");
+                // Try old format with project name
+                data = GetLump(projectName + ".MAP");
+            }
+            if (data == null)
+            {
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", "LoadMapData: Project MAP not found, trying generic old format");
+                // Try generic old format
                 data = GetLump(".DT6");
             }
 
-            if (data == null) return null;
+            if (data == null)
+            {
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Warning("Map Loading", "LoadMapData: No map data found in any format");
+                return null;
+            }
+
+            OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"LoadMapData: Found map data, size: {data.Length} bytes");
 
             try
             {
@@ -941,18 +1050,21 @@ namespace OHRRPGCEDX.GameData
                 
                 if (data.Length > 4 && Encoding.ASCII.GetString(data, 0, 4) == "RELD")
                 {
+                    OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", "LoadMapData: Detected RELD format, parsing...");
                     ParseMapRelDFormat(data, maps);
                 }
                 else
                 {
+                    OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", "LoadMapData: Detected old binary format, parsing...");
                     ParseMapOldBinaryFormat(data, maps);
                 }
 
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"LoadMapData: Successfully parsed {maps.Count} maps");
                 return maps.ToArray();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to parse map data: {ex.Message}");
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Error("Map Loading", $"LoadMapData: Failed to parse map data: {ex.Message}", null, ex);
                 return null;
             }
         }
@@ -987,6 +1099,12 @@ namespace OHRRPGCEDX.GameData
                         map.Layers = reader.ReadInt32();
                         map.Background = reader.ReadInt32();
                         map.Music = reader.ReadInt32();
+                        
+                        // Read tileset ID (new field)
+                        map.TilesetId = reader.ReadInt32();
+                        
+                        // Validate map dimensions
+                        ValidateMapDimensions(map);
                         
                         // Read map layers
                         map.LayerData = new int[map.Layers][,];
@@ -1074,70 +1192,802 @@ namespace OHRRPGCEDX.GameData
             using (var stream = new MemoryStream(data))
             using (var reader = new BinaryReader(stream))
             {
-                // Old format has fixed map records
-                var mapHeaderSize = 32; // Header size per map
-                var mapCount = data.Length / mapHeaderSize;
+                // Try different header sizes and formats
+                var possibleHeaderSizes = new[] { 32, 24, 16, 8 };
+                var mapCount = 0;
+                var headerSize = 32; // Default
+                
+                // Determine header size by trying to find valid map data
+                foreach (var size in possibleHeaderSizes)
+                {
+                    if (data.Length >= size && data.Length % size == 0)
+                    {
+                        var testCount = data.Length / size;
+                        if (testCount > 0 && testCount <= 1000) // Sanity check
+                        {
+                            // Test if this header size produces reasonable dimensions
+                            var testStream = new MemoryStream(data);
+                            var testReader = new BinaryReader(testStream);
+                            
+                            bool validFormat = true;
+                            for (int i = 0; i < Math.Min(3, testCount); i++) // Test first 3 maps
+                            {
+                                testStream.Position = i * size;
+                                if (size >= 4)
+                                {
+                                    var width = testReader.ReadInt16();
+                                    var height = testReader.ReadInt16();
+                                    
+                                    if (width < 16 || width > 32768 || height < 10 || height > 32768)
+                                    {
+                                        validFormat = false;
+                                        break;
+                                    }
+                                }
+                                else
+                                {
+                                    validFormat = false;
+                                    break;
+                                }
+                            }
+                            
+                            if (validFormat)
+                            {
+                                headerSize = size;
+                                mapCount = testCount;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"ParseMapOldBinaryFormat: Parsing {mapCount} maps from old binary format with header size {headerSize} (data size: {data.Length})");
                 
                 for (int i = 0; i < mapCount; i++)
                 {
                     var map = new MapData();
                     
-                    // Read map properties
-                    map.Width = reader.ReadInt32();
-                    map.Height = reader.ReadInt32();
-                    map.Layers = reader.ReadInt32();
-                    map.Background = reader.ReadInt32();
-                    map.Music = reader.ReadInt32();
+                    // Reset stream position for this map
+                    stream.Position = i * headerSize;
                     
-                    // Initialize with default values for old format
-                    if (map.Width <= 0 || map.Height <= 0)
+                    // Read map properties based on header size
+                    if (headerSize >= 4)
                     {
-                        map.Width = 50;
-                        map.Height = 50;
-                        map.Layers = 3;
+                        map.Width = reader.ReadInt16();
+                        map.Height = reader.ReadInt16();
                     }
+                    else
+                    {
+                        map.Width = 50; // Default
+                        map.Height = 50; // Default
+                    }
+                    
+                    if (headerSize >= 6)
+                    {
+                        map.Layers = reader.ReadInt16();
+                    }
+                    else
+                    {
+                        map.Layers = 3; // Default
+                    }
+                    
+                    if (headerSize >= 8)
+                    {
+                        map.Background = reader.ReadInt16();
+                    }
+                    else
+                    {
+                        map.Background = 0; // Default
+                    }
+                    
+                    if (headerSize >= 10)
+                    {
+                        map.Music = reader.ReadInt16();
+                    }
+                    else
+                    {
+                        map.Music = 0; // Default
+                    }
+                    
+                    // Read tileset ID if available
+                    if (headerSize >= 12)
+                    {
+                        try
+                        {
+                            map.TilesetId = reader.ReadInt16();
+                        }
+                        catch
+                        {
+                            // Old format doesn't have tileset ID, use default
+                            map.TilesetId = 0;
+                        }
+                    }
+                    else
+                    {
+                        map.TilesetId = 0; // Default
+                    }
+                    
+                    OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"ParseMapOldBinaryFormat: Map {i} header - Width: {map.Width}, Height: {map.Height}, Layers: {map.Layers}, Tileset: {map.TilesetId}");
+                    
+                    // Validate and fix dimensions if needed
+                    ValidateMapDimensions(map);
                     
                     // Initialize layer data
                     map.LayerData = new int[map.Layers][,];
                     for (int layer = 0; layer < map.Layers; layer++)
                     {
                         map.LayerData[layer] = new int[map.Width, map.Height];
+                        
+                        // Fill with default tiles (grass/floor)
+                        for (int x = 0; x < map.Width; x++)
+                        {
+                            for (int y = 0; y < map.Height; y++)
+                            {
+                                map.LayerData[layer][x, y] = 1; // Default grass tile
+                            }
+                        }
+                    }
+                    
+                    // Initialize other arrays
+                    map.Tiles = new int[map.Width * map.Height];
+                    map.Passability = new int[map.Width * map.Height];
+                    map.NPCs = new NPCData[0];
+                    map.Doors = new DoorData[0];
+                    map.Events = new MapEvent[0];
+                    
+                    // Fill tiles array with default values
+                    for (int j = 0; j < map.Tiles.Length; j++)
+                    {
+                        map.Tiles[j] = 1; // Default grass tile
+                        map.Passability[j] = 1; // Default passable
+                    }
+                    
+                    OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"ParseMapOldBinaryFormat: Map {i}: {map.Width}x{map.Height}, {map.Layers} layers, tileset: {map.TilesetId}");
+                    
+                    // Load the actual tile data from separate lumps
+                    LoadMapTileData(map, i);
+                    
+                    maps.Add(map);
+                }
+                
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"ParseMapOldBinaryFormat: Successfully parsed {maps.Count} maps");
+            }
+        }
+
+        /// <summary>
+        /// Validate and fix map dimensions to ensure they are reasonable
+        /// </summary>
+        private void ValidateMapDimensions(MapData map)
+        {
+            var originalWidth = map.Width;
+            var originalHeight = map.Height;
+            
+            // Check for invalid dimensions
+            if (map.Width <= 0 || map.Width > 32768)
+            {
+                Console.WriteLine($"Warning: Invalid map width {map.Width}, using default 50");
+                map.Width = 50;
+            }
+            
+            if (map.Height <= 0 || map.Height > 32768)
+            {
+                Console.WriteLine($"Warning: Invalid map height {map.Height}, using default 50");
+                map.Height = 50;
+            }
+            
+            // Check for extremely small dimensions
+            if (map.Width < 16)
+            {
+                Console.WriteLine($"Warning: Map width {map.Width} is very small, using minimum 16");
+                map.Width = 16;
+            }
+            
+            if (map.Height < 10)
+            {
+                Console.WriteLine($"Warning: Map height {map.Height} is very small, using minimum 10");
+                map.Height = 10;
+            }
+            
+            // If dimensions changed, reinitialize arrays
+            if (map.Width != originalWidth || map.Height != originalHeight)
+            {
+                Console.WriteLine($"Map dimensions changed from {originalWidth}x{originalHeight} to {map.Width}x{map.Height}");
+                
+                // Reinitialize arrays with new dimensions
+                map.Tiles = new int[map.Width * map.Height];
+                map.Passability = new int[map.Width * map.Height];
+                
+                if (map.LayerData != null)
+                {
+                    map.LayerData = new int[map.Layers][,];
+                    for (int layer = 0; layer < map.Layers; layer++)
+                    {
+                        map.LayerData[layer] = new int[map.Width, map.Height];
+                        
                         // Fill with default tiles
                         for (int x = 0; x < map.Width; x++)
                         {
                             for (int y = 0; y < map.Height; y++)
                             {
-                                map.LayerData[layer][x, y] = 0;
+                                map.LayerData[layer][x, y] = 1; // Default grass tile
+                            }
+                        }
+                    }
+                }
+                
+                // Fill tiles array with default values
+                for (int j = 0; j < map.Tiles.Length; j++)
+                {
+                    map.Tiles[j] = 1; // Default grass tile
+                    map.Passability[j] = 1; // Default passable
+                }
+            }
+        }
+
+        /// <summary>
+        /// Load tile data for a specific map from old engine lumps
+        /// </summary>
+        private void LoadMapTileData(MapData map, int mapId)
+        {
+            var projectName = GetProjectName();
+            
+            // Use logging system instead of Console.WriteLine
+            OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"LoadMapTileData: Map {mapId} initial dimensions: {map.Width}x{map.Height}");
+            
+            // Try to load tile data from .E lump (tiles) - use uppercase to match actual lump names
+            var tileLumpName = $"{projectName}.E{mapId:D2}";
+            var tileData = GetLump(tileLumpName);
+            
+            OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"LoadMapTileData: Looking for lump '{tileLumpName}', found: {tileData != null}");
+            
+            if (tileData != null)
+            {
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"Loading tile data for map {mapId} from {tileLumpName}");
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"LoadMapTileData: Before LoadTilemapFromLump - map dimensions: {map.Width}x{map.Height}");
+                LoadTilemapFromLump(map, tileData);
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"LoadMapTileData: After LoadTilemapFromLump - map dimensions: {map.Width}x{map.Height}");
+            }
+            else
+            {
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Warning("Map Loading", $"No tile data found for map {mapId} in lump {tileLumpName}");
+            }
+            
+            // Try to load zone data from .Z lump (passability)
+            var zoneLumpName = $"{projectName}.Z{mapId:D2}";
+            var zoneData = GetLump(zoneLumpName);
+            
+            if (zoneData != null)
+            {
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"Loading zone data for map {mapId} from {zoneLumpName}");
+                LoadZoneDataFromLump(map, zoneData);
+            }
+            
+            // Try to load NPC data from .L lump
+            var npcLumpName = $"{projectName}.L{mapId:D2}";
+            var npcData = GetLump(npcLumpName);
+            
+            if (npcData != null)
+            {
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Map Loading", $"Loading NPC data for map {mapId} from {npcLumpName}");
+                LoadNPCLFromLump(map, npcData);
+            }
+        }
+        
+        /// <summary>
+        /// Load tilemap data from a lump (based on oldengine/loading.rbas LoadTilemap)
+        /// </summary>
+        private void LoadTilemapFromLump(MapData map, byte[] data)
+        {
+            try
+            {
+                Console.WriteLine($"Tile lump data size: {data.Length} bytes");
+                var first20Bytes = "";
+                for (int i = 0; i < Math.Min(20, data.Length); i++)
+                {
+                    first20Bytes += $"{data[i]:X2} ";
+                }
+                Console.WriteLine($"First 20 bytes: {first20Bytes}");
+                
+                // Try different data formats
+                if (TryParseBSAVEFormat(map, data))
+                {
+                    Console.WriteLine("Successfully parsed BSAVE format");
+                    return;
+                }
+                else if (TryParseRawFormat(map, data))
+                {
+                    Console.WriteLine("Successfully parsed raw format");
+                    return;
+                }
+                else if (TryParseLegacyFormat(map, data))
+                {
+                    Console.WriteLine("Successfully parsed legacy format");
+                    return;
+                }
+                else
+                {
+                    Console.WriteLine("Failed to parse tile data in any known format");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading tilemap: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Try to parse data as BSAVE format
+        /// </summary>
+        private bool TryParseBSAVEFormat(MapData map, byte[] data)
+        {
+            try
+            {
+                if (data.Length < 11)
+                {
+                    Console.WriteLine("Data too short for BSAVE format");
+                    return false;
+                }
+                
+                // BSAVE header: 7 bytes
+                // Byte 0: Magic number (253 = 0xFD)
+                // Bytes 1-2: Segment (obsolete, usually 0x9999)
+                // Bytes 3-4: Offset (obsolete, usually 0)
+                // Bytes 5-6: Length in bytes
+                var magicByte = data[0];
+                var segment = BitConverter.ToUInt16(data, 1);
+                var offset = BitConverter.ToUInt16(data, 3);
+                var length = BitConverter.ToUInt16(data, 5);
+                
+                Console.WriteLine($"BSAVE header: magic=0x{magicByte:X2}, segment=0x{segment:X4}, offset=0x{offset:X4}, length={length}");
+                
+                // Validate BSAVE header
+                if (magicByte != 0xFD)
+                {
+                    Console.WriteLine($"Invalid BSAVE magic byte: 0x{magicByte:X2}");
+                    return false;
+                }
+                
+                using (var stream = new MemoryStream(data))
+                using (var reader = new BinaryReader(stream))
+                {
+                    // Skip BSAVE header (7 bytes) and read width/height
+                    // According to oldengine/loading.rbas LoadTilemap function:
+                    // Width is at offset 8-9, Height is at offset 10-11
+                    stream.Position = 8;
+                    var lumpWidth = reader.ReadInt16();
+                    var lumpHeight = reader.ReadInt16();
+                    
+                    Console.WriteLine($"Lump contains {lumpWidth}x{lumpHeight} tiles");
+                    
+                    // Validate dimensions (same bounds as old engine)
+                    if (lumpWidth < 16 || lumpWidth > 32768 || lumpHeight < 10 || lumpHeight > 32768)
+                    {
+                        Console.WriteLine($"Invalid tilemap dimensions in lump: {lumpWidth}x{lumpHeight}");
+                        return false;
+                    }
+                    
+                    // Calculate number of layers (same formula as old engine)
+                    // According to oldengine/loading.rbas, the header is 11 bytes total
+                    // BSAVE header (7) + width (2) + height (2) = 11 bytes
+                    // Tile data starts at offset 11 (after BSAVE header + width + height)
+                    var dataSize = data.Length - 11;
+                    var layerSize = lumpWidth * lumpHeight;
+                    var numLayers = dataSize / layerSize;
+                    
+                    if (numLayers <= 0)
+                    {
+                        Console.WriteLine($"Invalid layer count: {numLayers}");
+                        return false;
+                    }
+                    
+                    Console.WriteLine($"Loading {numLayers} layers of {lumpWidth}x{lumpHeight} tiles");
+                    
+                    // Ensure the map has the correct dimensions
+                    if (map.Width != lumpWidth || map.Height != lumpHeight)
+                    {
+                        Console.WriteLine($"Updating map dimensions from {map.Width}x{map.Height} to {lumpWidth}x{lumpHeight}");
+                        map.Width = lumpWidth;
+                        map.Height = lumpHeight;
+                        
+                        // Reinitialize arrays with new dimensions
+                        map.Tiles = new int[map.Width * map.Height];
+                        map.Passability = new int[map.Width * map.Height];
+                        map.LayerData = new int[map.Layers][,];
+                        for (int layer = 0; layer < map.Layers; layer++)
+                        {
+                            map.LayerData[layer] = new int[map.Width, map.Height];
+                        }
+                    }
+                    
+                    // Read tile data for each layer
+                    // Data starts at offset 11 (after BSAVE header + width + height)
+                    stream.Position = 11;
+                    
+                    // Debug: Show first few bytes of tile data
+                    var tileDataStart = new byte[Math.Min(32, data.Length - 11)];
+                    Array.Copy(data, 11, tileDataStart, 0, tileDataStart.Length);
+                    var tileDataHex = string.Join(" ", tileDataStart.Select(b => $"{b:X2}"));
+                    Console.WriteLine($"First {tileDataStart.Length} bytes of tile data: {tileDataHex}");
+                    
+                    for (int layer = 0; layer < Math.Min(numLayers, map.Layers); layer++)
+                    {
+                        Console.WriteLine($"Loading layer {layer}...");
+                        for (int y = 0; y < lumpHeight; y++)
+                        {
+                            for (int x = 0; x < lumpWidth; x++)
+                            {
+                                var tileIndex = reader.ReadByte();
+                                if (x < map.Width && y < map.Height)
+                                {
+                                    map.LayerData[layer][x, y] = tileIndex;
+                                    
+                                    // Debug: Log first few tile values and some random ones
+                                    if ((x < 5 && y < 5) || (x == 32 && y == 32) || (x == 63 && y == 63))
+                                    {
+                                        Console.WriteLine($"  Layer {layer}, Tile at ({x},{y}): {tileIndex}");
+                                    }
+                                }
                             }
                         }
                     }
                     
-                    // Initialize passability
-                    var passability = new bool[map.Width, map.Height];
-                    for (int x = 0; x < map.Width; x++)
+                    // Update the main tiles array with the first layer
+                    if (map.LayerData.Length > 0)
                     {
                         for (int y = 0; y < map.Height; y++)
                         {
-                            passability[x, y] = true;
+                            for (int x = 0; x < map.Width; x++)
+                            {
+                                var index = y * map.Width + x;
+                                if (index < map.Tiles.Length)
+                                {
+                                    map.Tiles[index] = map.LayerData[0][x, y];
+                                }
+                            }
                         }
                     }
-                    // Convert 2D boolean array to 1D int array
-                    int[] passabilityArray = new int[passability.GetLength(0) * passability.GetLength(1)];
-                    for (int row = 0; row < passability.GetLength(0); row++)
-                    {
-                        for (int col = 0; col < passability.GetLength(1); col++)
-                        {
-                            passabilityArray[row * passability.GetLength(1) + col] = passability[row, col] ? 1 : 0;
-                        }
-                    }
-                    map.Passability = passabilityArray;
                     
-                    // Initialize NPCs and events
-                    map.NPCs = new NPCData[0];
-                    map.Events = new MapEvent[0];
-                    
-                    maps.Add(map);
+                    Console.WriteLine($"Successfully loaded tile data for map {map.Width}x{map.Height}");
+                    return true;
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing BSAVE format: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Try to parse data as raw format (no header, just tile data)
+        /// </summary>
+        private bool TryParseRawFormat(MapData map, byte[] data)
+        {
+            try
+            {
+                // Assume the data is raw tile data with no header
+                // Try to determine dimensions based on data size and map properties
+                var dataSize = data.Length;
+                var expectedTileCount = map.Width * map.Height;
+                
+                if (dataSize >= expectedTileCount)
+                {
+                    Console.WriteLine($"Parsing as raw format: {dataSize} bytes for {expectedTileCount} tiles");
+                    
+                    using (var stream = new MemoryStream(data))
+                    using (var reader = new BinaryReader(stream))
+                    {
+                        // Read tile data directly
+                        for (int y = 0; y < map.Height; y++)
+                        {
+                            for (int x = 0; x < map.Width; x++)
+                            {
+                                var tileIndex = reader.ReadByte();
+                                var index = y * map.Width + x;
+                                if (index < map.Tiles.Length)
+                                {
+                                    map.Tiles[index] = tileIndex;
+                                }
+                                
+                                if (map.LayerData.Length > 0)
+                                {
+                                    map.LayerData[0][x, y] = tileIndex;
+                                }
+                            }
+                        }
+                        
+                        Console.WriteLine($"Successfully loaded raw tile data for map {map.Width}x{map.Height}");
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing raw format: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Try to parse data as legacy format (different header structure)
+        /// </summary>
+        private bool TryParseLegacyFormat(MapData map, byte[] data)
+        {
+            try
+            {
+                if (data.Length < 4)
+                {
+                    return false;
+                }
+                
+                // Try different legacy header formats
+                // Format 1: 2-byte width, 2-byte height
+                if (data.Length >= 4)
+                {
+                    var width = BitConverter.ToUInt16(data, 0);
+                    var height = BitConverter.ToUInt16(data, 2);
+                    
+                    if (width >= 16 && width <= 32768 && height >= 10 && height <= 32768)
+                    {
+                        Console.WriteLine($"Parsing as legacy format 1: {width}x{height}");
+                        
+                        // Update map dimensions if needed
+                        if (map.Width != width || map.Height != height)
+                        {
+                            Console.WriteLine($"Updating map dimensions from {map.Width}x{map.Height} to {width}x{height}");
+                            map.Width = width;
+                            map.Height = height;
+                            
+                            // Reinitialize arrays
+                            map.Tiles = new int[map.Width * map.Height];
+                            map.Passability = new int[map.Width * map.Height];
+                            map.LayerData = new int[map.Layers][,];
+                            for (int layer = 0; layer < map.Layers; layer++)
+                            {
+                                map.LayerData[layer] = new int[map.Width, map.Height];
+                            }
+                        }
+                        
+                        // Read tile data starting from offset 4
+                        using (var stream = new MemoryStream(data))
+                        using (var reader = new BinaryReader(stream))
+                        {
+                            stream.Position = 4;
+                            
+                            for (int y = 0; y < map.Height; y++)
+                            {
+                                for (int x = 0; x < map.Width; x++)
+                                {
+                                    if (stream.Position < stream.Length)
+                                    {
+                                        var tileIndex = reader.ReadByte();
+                                        var index = y * map.Width + x;
+                                        if (index < map.Tiles.Length)
+                                        {
+                                            map.Tiles[index] = tileIndex;
+                                        }
+                                        
+                                        if (map.LayerData.Length > 0)
+                                        {
+                                            map.LayerData[0][x, y] = tileIndex;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Console.WriteLine($"Successfully loaded legacy format tile data for map {map.Width}x{map.Height}");
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing legacy format: {ex.Message}");
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Load zone data from a lump (based on oldengine/loading.rbas)
+        /// </summary>
+        private void LoadZoneDataFromLump(MapData map, byte[] data)
+        {
+            try
+            {
+                // Try different data formats
+                if (TryParseZoneBSAVEFormat(map, data))
+                {
+                    Console.WriteLine("Successfully parsed zone data in BSAVE format");
+                    return;
+                }
+                else if (TryParseZoneRawFormat(map, data))
+                {
+                    Console.WriteLine("Successfully parsed zone data in raw format");
+                    return;
+                }
+                else
+                {
+                    Console.WriteLine("Failed to parse zone data in any known format");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading zone data: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Try to parse zone data as BSAVE format
+        /// </summary>
+        private bool TryParseZoneBSAVEFormat(MapData map, byte[] data)
+        {
+            try
+            {
+                if (data.Length < 12)
+                {
+                    Console.WriteLine("Zone data too short for BSAVE format");
+                    return false;
+                }
+                
+                // BSAVE header: 7 bytes
+                // Byte 0: Magic number (253 = 0xFD)
+                // Bytes 1-2: Segment (obsolete, usually 0x9999)
+                // Bytes 3-4: Offset (obsolete, usually 0)
+                // Bytes 5-6: Length in bytes
+                var magicByte = data[0];
+                
+                // Validate BSAVE header
+                if (magicByte != 0xFD)
+                {
+                    Console.WriteLine($"Invalid BSAVE magic byte in zone data: 0x{magicByte:X2}");
+                    return false;
+                }
+                
+                using (var stream = new MemoryStream(data))
+                using (var reader = new BinaryReader(stream))
+                {
+                    // Skip BSAVE header (7 bytes) and read width/height
+                    // Width is at offset 8-9, Height is at offset 10-11
+                    stream.Position = 8;
+                    var width = reader.ReadInt16();
+                    var height = reader.ReadInt16();
+                    
+                    Console.WriteLine($"Zone data: {width}x{height}");
+                    
+                    // Read zone data and convert to passability
+                    // Data starts at offset 11 (after BSAVE header + width + height)
+                    var dataSize = data.Length - 11;
+                    var zoneSize = width * height;
+                    
+                    if (dataSize >= zoneSize)
+                    {
+                        stream.Position = 11;
+                        for (int y = 0; y < Math.Min(height, map.Height); y++)
+                        {
+                            for (int x = 0; x < Math.Min(width, map.Width); x++)
+                            {
+                                var zoneId = reader.ReadByte();
+                                var index = y * map.Width + x;
+                                if (index < map.Passability.Length)
+                                {
+                                    // Convert zone ID to passability (simplified)
+                                    map.Passability[index] = (zoneId == 0) ? 1 : 0;
+                                }
+                            }
+                        }
+                        Console.WriteLine($"Loaded zone data for {width}x{height} map");
+                        return true;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Zone data size mismatch: expected {zoneSize}, got {dataSize}");
+                        return false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing zone BSAVE format: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Try to parse zone data as raw format
+        /// </summary>
+        private bool TryParseZoneRawFormat(MapData map, byte[] data)
+        {
+            try
+            {
+                // Assume the data is raw zone data with no header
+                var dataSize = data.Length;
+                var expectedZoneCount = map.Width * map.Height;
+                
+                if (dataSize >= expectedZoneCount)
+                {
+                    Console.WriteLine($"Parsing zone data as raw format: {dataSize} bytes for {expectedZoneCount} zones");
+                    
+                    using (var stream = new MemoryStream(data))
+                    using (var reader = new BinaryReader(stream))
+                    {
+                        for (int y = 0; y < map.Height; y++)
+                        {
+                            for (int x = 0; x < map.Width; x++)
+                            {
+                                if (stream.Position < stream.Length)
+                                {
+                                    var zoneId = reader.ReadByte();
+                                    var index = y * map.Width + x;
+                                    if (index < map.Passability.Length)
+                                    {
+                                        // Convert zone ID to passability (simplified)
+                                        map.Passability[index] = (zoneId == 0) ? 1 : 0;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Console.WriteLine($"Successfully loaded raw zone data for map {map.Width}x{map.Height}");
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing zone raw format: {ex.Message}");
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Load NPC instances from a lump (based on oldengine/loading.rbas)
+        /// </summary>
+        private void LoadNPCLFromLump(MapData map, byte[] data)
+        {
+            try
+            {
+                using (var stream = new MemoryStream(data))
+                using (var reader = new BinaryReader(stream))
+                {
+                    // Skip BSAVE header (11 bytes)
+                    stream.Position = 11;
+                    
+                    // Read NPC data (simplified - just read positions for now)
+                    var npcCount = Math.Min(300, (data.Length - 11) / 8); // Assume 8 bytes per NPC
+                    var npcs = new List<NPCData>();
+                    
+                    for (int i = 0; i < npcCount; i++)
+                    {
+                        if (stream.Position + 8 <= stream.Length)
+                        {
+                            var npc = new NPCData();
+                            npc.X = reader.ReadInt16();
+                            npc.Y = reader.ReadInt16();
+                            npc.Picture = reader.ReadInt16();
+                            npc.MovementType = reader.ReadInt16();
+                            
+                            if (npc.X >= 0 && npc.Y >= 0 && npc.X < map.Width && npc.Y < map.Height)
+                            {
+                                npc.Active = true;
+                                npcs.Add(npc);
+                            }
+                        }
+                    }
+                    
+                    map.NPCs = npcs.ToArray();
+                    Console.WriteLine($"Loaded {map.NPCs.Length} NPCs for map");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading NPC data: {ex.Message}");
             }
         }
 
@@ -1146,9 +1996,37 @@ namespace OHRRPGCEDX.GameData
         /// </summary>
         public TilesetData LoadTilesetData(int tilesetId)
         {
-            var lumpName = $"tileset{tilesetId:D3}.rgfx";
-            var data = GetLump(lumpName);
-            if (data == null) return null;
+            // Try different tileset lump names
+            var possibleNames = new[]
+            {
+                $"tileset{tilesetId:D3}.rgfx",
+                $"tileset{tilesetId:D2}.rgfx",
+                $"tileset{tilesetId}.rgfx",
+                $"TILESET{tilesetId:D3}.RGFX",
+                $"TILESET{tilesetId:D2}.RGFX",
+                $"TILESET{tilesetId}.RGFX"
+            };
+            
+            byte[] data = null;
+            string foundName = null;
+            
+            foreach (var name in possibleNames)
+            {
+                data = GetLump(name);
+                if (data != null)
+                {
+                    foundName = name;
+                    break;
+                }
+            }
+            
+            if (data == null)
+            {
+                Console.WriteLine($"Failed to find tileset lump for ID {tilesetId}. Tried: {string.Join(", ", possibleNames)}");
+                return null;
+            }
+
+            Console.WriteLine($"Found tileset lump: {foundName}, size: {data.Length} bytes");
 
             try
             {
@@ -1175,6 +2053,8 @@ namespace OHRRPGCEDX.GameData
                     tileSize = reader.ReadInt32();
                     hasAnimations = reader.ReadBoolean();
                     
+                    Console.WriteLine($"Tileset header: magic={magic}, version={version}, tiles={tileCount}, size={tileSize}, animations={hasAnimations}");
+                    
                     tileset.TileCount = tileCount;
                     tileset.TileSize = tileSize;
                     tileset.HasAnimations = hasAnimations;
@@ -1183,53 +2063,155 @@ namespace OHRRPGCEDX.GameData
                     tileset.TileGraphics = new byte[tileCount][];
                     for (int i = 0; i < tileCount; i++)
                     {
-                        var tileDataSize = reader.ReadInt32();
-                        tileset.TileGraphics[i] = new byte[tileDataSize];
-                        reader.Read(tileset.TileGraphics[i], 0, tileDataSize);
-                    }
-                    
-                    // Read palette data
-                    var paletteSize = reader.ReadInt32();
-                    tileset.Palette = new byte[paletteSize];
-                    reader.Read(tileset.Palette, 0, paletteSize);
-                    
-                    // Read animation data if present
-                    if (hasAnimations)
-                    {
-                        var animCount = reader.ReadInt32();
-                        tileset.Animations = new TileAnimation[animCount];
-                        
-                        for (int i = 0; i < animCount; i++)
+                        if (stream.Position + 4 <= stream.Length)
                         {
-                            var anim = new TileAnimation();
-                            anim.TileID = reader.ReadInt32();
-                            anim.FrameCount = reader.ReadInt32();
-                            anim.FrameDelay = reader.ReadInt32();
-                            anim.Frames = new int[anim.FrameCount];
-                            
-                            for (int j = 0; j < anim.FrameCount; j++)
+                            var tileDataSize = reader.ReadInt32();
+                            if (tileDataSize > 0 && stream.Position + tileDataSize <= stream.Length)
                             {
-                                anim.Frames[j] = reader.ReadInt32();
+                                tileset.TileGraphics[i] = new byte[tileDataSize];
+                                reader.Read(tileset.TileGraphics[i], 0, tileDataSize);
+                                
+                                if (i < 5) // Only log first few tiles to avoid spam
+                                {
+                                    Console.WriteLine($"Tile {i}: {tileDataSize} bytes");
+                                }
                             }
-                            
-                            tileset.Animations[i] = anim;
+                            else
+                            {
+                                Console.WriteLine($"Warning: Invalid tile data size for tile {i}: {tileDataSize}");
+                                tileset.TileGraphics[i] = new byte[0];
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Warning: Unexpected end of stream at tile {i}");
+                            tileset.TileGraphics[i] = new byte[0];
                         }
                     }
                     
-                    // Read metadata
-                    var metadataCount = reader.ReadInt32();
-                    tileset.Metadata = new Dictionary<string, string>();
-                    for (int i = 0; i < metadataCount; i++)
+                    // Read palette data if available
+                    if (stream.Position + 4 <= stream.Length)
                     {
-                        var keyLength = reader.ReadInt32();
-                        var key = ReadFixedString(reader, keyLength);
-                        var valueLength = reader.ReadInt32();
-                        var value = ReadFixedString(reader, valueLength);
-                        tileset.Metadata[key] = value;
+                        var paletteSize = reader.ReadInt32();
+                        if (paletteSize > 0 && stream.Position + paletteSize <= stream.Length)
+                        {
+                            tileset.Palette = new byte[paletteSize];
+                            reader.Read(tileset.Palette, 0, paletteSize);
+                            Console.WriteLine($"Palette: {paletteSize} bytes");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Warning: Invalid palette size: {paletteSize}");
+                            tileset.Palette = new byte[0];
+                        }
+                    }
+                    else
+                    {
+                        tileset.Palette = new byte[0];
+                    }
+                    
+                    // Read animation data if present
+                    if (hasAnimations && stream.Position + 4 <= stream.Length)
+                    {
+                        var animCount = reader.ReadInt32();
+                        if (animCount > 0 && animCount < 1000) // Sanity check
+                        {
+                            tileset.Animations = new TileAnimation[animCount];
+                            
+                            for (int i = 0; i < animCount; i++)
+                            {
+                                if (stream.Position + 12 <= stream.Length)
+                                {
+                                    var anim = new TileAnimation();
+                                    anim.TileID = reader.ReadInt32();
+                                    anim.FrameCount = reader.ReadInt32();
+                                    anim.FrameDelay = reader.ReadInt32();
+                                    
+                                    if (anim.FrameCount > 0 && anim.FrameCount < 100 && stream.Position + anim.FrameCount * 4 <= stream.Length)
+                                    {
+                                        anim.Frames = new int[anim.FrameCount];
+                                        
+                                        for (int j = 0; j < anim.FrameCount; j++)
+                                        {
+                                            anim.Frames[j] = reader.ReadInt32();
+                                        }
+                                        
+                                        tileset.Animations[i] = anim;
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"Warning: Invalid animation {i} frame count: {anim.FrameCount}");
+                                        tileset.Animations[i] = new TileAnimation();
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Warning: Unexpected end of stream at animation {i}");
+                                    tileset.Animations[i] = new TileAnimation();
+                                }
+                            }
+                            
+                            Console.WriteLine($"Animations: {animCount} animation sequences");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Warning: Invalid animation count: {animCount}");
+                            tileset.Animations = new TileAnimation[0];
+                        }
+                    }
+                    else
+                    {
+                        tileset.Animations = new TileAnimation[0];
+                    }
+                    
+                    // Read metadata if available
+                    if (stream.Position + 4 <= stream.Length)
+                    {
+                        var metadataCount = reader.ReadInt32();
+                        if (metadataCount > 0 && metadataCount < 1000) // Sanity check
+                        {
+                            tileset.Metadata = new Dictionary<string, string>();
+                            for (int i = 0; i < metadataCount; i++)
+                            {
+                                if (stream.Position + 8 <= stream.Length)
+                                {
+                                    var keyLength = reader.ReadInt32();
+                                    var valueLength = reader.ReadInt32();
+                                    
+                                    if (keyLength > 0 && keyLength < 1000 && valueLength >= 0 && valueLength < 10000 &&
+                                        stream.Position + keyLength + valueLength <= stream.Length)
+                                    {
+                                        var key = ReadFixedString(reader, keyLength);
+                                        var value = ReadFixedString(reader, valueLength);
+                                        tileset.Metadata[key] = value;
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"Warning: Invalid metadata entry {i} lengths: key={keyLength}, value={valueLength}");
+                                        break;
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Warning: Unexpected end of stream at metadata entry {i}");
+                                    break;
+                                }
+                            }
+                            
+                            Console.WriteLine($"Metadata: {tileset.Metadata.Count} entries");
+                        }
+                        else
+                        {
+                            tileset.Metadata = new Dictionary<string, string>();
+                        }
+                    }
+                    else
+                    {
+                        tileset.Metadata = new Dictionary<string, string>();
                     }
                 }
                 
-                Console.WriteLine($"Loaded tileset {tilesetId}: {tileCount} tiles, {tileSize}x{tileSize}, animations: {hasAnimations}");
+                Console.WriteLine($"Successfully loaded tileset {tilesetId}: {tileCount} tiles, {tileSize}x{tileSize}, animations: {hasAnimations}");
                 return tileset;
             }
             catch (Exception ex)
@@ -2207,6 +3189,58 @@ namespace OHRRPGCEDX.GameData
         {
             lumps?.Clear();
             isLoaded = false;
+        }
+
+        /// <summary>
+        /// Check if a tileset is available
+        /// </summary>
+        public bool IsTilesetAvailable(int tilesetId)
+        {
+            var possibleNames = new[]
+            {
+                $"tileset{tilesetId:D3}.rgfx",
+                $"tileset{tilesetId:D2}.rgfx",
+                $"tileset{tilesetId}.rgfx",
+                $"TILESET{tilesetId:D3}.RGFX",
+                $"TILESET{tilesetId:D2}.RGFX",
+                $"TILESET{tilesetId}.RGFX"
+            };
+            
+            foreach (var name in possibleNames)
+            {
+                if (HasLump(name))
+                {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        /// <summary>
+        /// Get available tileset IDs
+        /// </summary>
+        public List<int> GetAvailableTilesetIds()
+        {
+            var availableIds = new List<int>();
+            
+            foreach (var lumpName in lumps.Keys)
+            {
+                if (lumpName.StartsWith("tileset", StringComparison.OrdinalIgnoreCase) && 
+                    lumpName.EndsWith(".rgfx", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Extract tileset ID from name
+                    var nameWithoutExt = lumpName.Substring(0, lumpName.Length - 5); // Remove .rgfx
+                    var tilesetPart = nameWithoutExt.Substring(7); // Remove "tileset"
+                    
+                    if (int.TryParse(tilesetPart, out int tilesetId))
+                    {
+                        availableIds.Add(tilesetId);
+                    }
+                }
+            }
+            
+            return availableIds;
         }
     }
 

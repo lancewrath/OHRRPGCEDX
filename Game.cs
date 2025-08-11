@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Linq;
 using OHRRPGCEDX.Graphics;
 using OHRRPGCEDX.Input;
 using OHRRPGCEDX.Audio;
@@ -622,44 +623,96 @@ namespace OHRRPGCEDX.Game
             if (currentGameData?.Maps != null && currentGameData.Maps.Length > 0)
             {
                 var firstMap = currentGameData.Maps[0];
+                Console.WriteLine($"First map tileset ID: {firstMap.TilesetId}");
+                
+                // Debug: Show available lumps
+                var availableLumps = rpgLoader.GetLumpNames();
+                Console.WriteLine($"Available lumps ({availableLumps.Count()}):");
+                foreach (var lump in availableLumps.Take(20)) // Show first 20 lumps
+                {
+                    Console.WriteLine($"  {lump}");
+                }
+                
+                // Check available tilesets
+                var availableTilesets = rpgLoader.GetAvailableTilesetIds();
+                Console.WriteLine($"Available tilesets: {string.Join(", ", availableTilesets)}");
+                
                 if (firstMap.TilesetId >= 0)
                 {
-                    currentTileset = rpgLoader.LoadTilesetData(firstMap.TilesetId);
-                    if (currentTileset != null)
+                    // Check if the required tileset is available
+                    if (rpgLoader.IsTilesetAvailable(firstMap.TilesetId))
                     {
-                        Console.WriteLine($"Loaded tileset {firstMap.TilesetId} with {currentTileset.TileCount} tiles");
-                        
-                        // Load tileset texture using Direct2D texture manager
-                        // TODO: Re-enable when Direct2DTextureManager is working
-                        /*
-                        if (graphicsSystem?.TextureManager != null && currentTileset.TileGraphics != null)
+                        currentTileset = rpgLoader.LoadTilesetData(firstMap.TilesetId);
+                        if (currentTileset != null)
                         {
-                            try
+                            Console.WriteLine($"Loaded tileset {firstMap.TilesetId} with {currentTileset.TileCount} tiles");
+                            
+                            // Load tileset texture using Direct2D texture manager
+                            // TODO: Re-enable when Direct2DTextureManager is working
+                            /*
+                            if (graphicsSystem?.TextureManager != null && currentTileset.TileGraphics != null)
                             {
-                                var tilesetBitmap = graphicsSystem.TextureManager.LoadTilesetFromTiles(
-                                    $"tileset_{firstMap.TilesetId}",
-                                    currentTileset.TileGraphics,
-                                    currentTileset.TileSize,
-                                    currentTileset.TileCount,
-                                    currentTileset.Palette
-                                );
-                                
-                                if (tilesetBitmap != null)
+                                try
                                 {
-                                    mapRenderer?.SetTilesetBitmap(tilesetBitmap);
-                                    Console.WriteLine($"Tileset texture loaded successfully");
+                                    var tilesetBitmap = graphicsSystem.TextureManager.LoadTilesetFromTiles(
+                                        $"tileset_{firstMap.TilesetId}",
+                                        currentTileset.TileGraphics,
+                                        currentTileset.TileSize,
+                                        currentTileset.TileCount,
+                                        currentTileset.Palette
+                                    );
+                                    
+                                    if (tilesetBitmap != null)
+                                    {
+                                        mapRenderer?.SetTilesetBitmap(tilesetBitmap);
+                                        Console.WriteLine($"Tileset texture loaded successfully");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"Failed to load tileset texture: {ex.Message}");
                                 }
                             }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Failed to load tileset texture: {ex.Message}");
-                            }
+                            */
                         }
-                        */
+                        else
+                        {
+                            Console.WriteLine($"Failed to load tileset {firstMap.TilesetId}");
+                        }
                     }
                     else
                     {
-                        Console.WriteLine($"Failed to load tileset {firstMap.TilesetId}");
+                        Console.WriteLine($"Tileset {firstMap.TilesetId} is not available. Available tilesets: {string.Join(", ", availableTilesets)}");
+                        
+                        // Try to find an alternative tileset
+                        if (availableTilesets.Count > 0)
+                        {
+                            var alternativeTilesetId = availableTilesets[0];
+                            Console.WriteLine($"Trying alternative tileset {alternativeTilesetId}");
+                            
+                            currentTileset = rpgLoader.LoadTilesetData(alternativeTilesetId);
+                            if (currentTileset != null)
+                            {
+                                Console.WriteLine($"Loaded alternative tileset {alternativeTilesetId} with {currentTileset.TileCount} tiles");
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Map has no tileset ID specified");
+                    
+                    // Try to find any available tileset
+                    if (availableTilesets.Count > 0)
+                    {
+                        var tilesetId = availableTilesets[0];
+                        Console.WriteLine($"Trying to load tileset {tilesetId} as fallback");
+                        
+                        currentTileset = rpgLoader.LoadTilesetData(tilesetId);
+                        if (currentTileset != null)
+                        {
+                            Console.WriteLine($"Loaded fallback tileset {tilesetId} with {currentTileset.TileCount} tiles");
+                        }
                     }
                 }
             }
@@ -691,6 +744,11 @@ namespace OHRRPGCEDX.Game
                 if (currentGameData.Heroes != null && currentGameData.Heroes.Length > 0)
                 {
                     player.Initialize(currentGameData.Heroes[0]); // Use first hero as default
+                    Console.WriteLine($"Player initialized with hero: {currentGameData.Heroes[0].Name}");
+                }
+                else
+                {
+                    Console.WriteLine("Warning: No heroes found in game data");
                 }
                 
                 // Load starting map
@@ -708,11 +766,17 @@ namespace OHRRPGCEDX.Game
                     currentMap.TilesetId = mapData.TilesetId;
                     currentMap.BackgroundMusic = mapData.BackgroundMusic;
                     
+                    Console.WriteLine($"Map initialized: {currentMap.Name} ({currentMap.Width}x{currentMap.Height})");
+                    Console.WriteLine($"Tileset ID: {currentMap.TilesetId}");
+                    Console.WriteLine($"Tiles array length: {currentMap.Tiles?.Length ?? 0}");
+                    Console.WriteLine($"NPCs count: {currentMap.NPCs?.Length ?? 0}");
+                    
                     // Convert layer data if available
                     if (mapData.LayerData != null && mapData.LayerData.Length > 0)
                     {
                         currentMap.Layers = mapData.LayerData.Length;
                         currentMap.LayerData = mapData.LayerData;
+                        Console.WriteLine($"Using layer data: {currentMap.Layers} layers");
                     }
                     else
                     {
@@ -724,6 +788,7 @@ namespace OHRRPGCEDX.Game
                         // Convert 1D tiles array to 2D if needed
                         if (mapData.Tiles != null && mapData.Tiles.Length > 0)
                         {
+                            Console.WriteLine("Converting 1D tiles array to 2D layer data...");
                             for (int x = 0; x < mapData.Width; x++)
                             {
                                 for (int y = 0; y < mapData.Height; y++)
@@ -735,20 +800,27 @@ namespace OHRRPGCEDX.Game
                                     }
                                 }
                             }
+                            Console.WriteLine($"Converted {mapData.Width * mapData.Height} tiles to layer data");
                         }
                     }
                     
                     loggingSystem?.Info("Game Runtime", $"Map initialized: {currentMap.Name} ({currentMap.Width}x{currentMap.Height})");
+                }
+                else
+                {
+                    Console.WriteLine("Warning: No maps found in game data");
                 }
                 
                 // Set player position (default to center of map)
                 if (currentMap != null)
                 {
                     player.Position = new Point(currentMap.Width / 2, currentMap.Height / 2);
+                    Console.WriteLine($"Player position set to: ({player.Position.X}, {player.Position.Y})");
                 }
                 else
                 {
                     player.Position = new Point(0, 0); // Default starting position
+                    Console.WriteLine("Player position set to default: (0, 0)");
                 }
                 
                 // Initialize map renderer with graphics system components
@@ -759,6 +831,22 @@ namespace OHRRPGCEDX.Game
                         // For Direct2D, we don't need Direct3D device parameters
                         mapRenderer = new MapRenderer();
                         mapRenderer.SetMap(currentMap, currentTileset);
+                        
+                        // Debug tileset data
+                        if (currentTileset != null)
+                        {
+                            Console.WriteLine($"Tileset data: {currentTileset.TileCount} tiles, {currentTileset.TileSize}x{currentTileset.TileSize}");
+                            Console.WriteLine($"TileGraphics array length: {currentTileset.TileGraphics?.Length ?? 0}");
+                            if (currentTileset.TileGraphics != null && currentTileset.TileGraphics.Length > 0)
+                            {
+                                Console.WriteLine($"First tile data length: {currentTileset.TileGraphics[0]?.Length ?? 0}");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Warning: No tileset data available");
+                        }
+                        
                         loggingSystem?.Info("Game Runtime", "MapRenderer initialized successfully");
                     }
                     catch (Exception ex)
@@ -766,6 +854,10 @@ namespace OHRRPGCEDX.Game
                         loggingSystem?.Warning("Game Runtime", $"Failed to initialize MapRenderer: {ex.Message}");
                         mapRenderer = null;
                     }
+                }
+                else
+                {
+                    Console.WriteLine($"Warning: GraphicsSystem or currentMap is null. GraphicsSystem: {graphicsSystem != null}, currentMap: {currentMap != null}");
                 }
                 
                 loggingSystem?.Info("Game Runtime", "New game initialized successfully");
@@ -812,13 +904,17 @@ namespace OHRRPGCEDX.Game
                 // Clear with a dark green background for the game world
                 graphicsSystem?.Clear(Color.FromArgb(255, 26, 77, 26));
                 
+                Console.WriteLine($"Rendering game world... MapRenderer: {mapRenderer != null}, CurrentMap: {currentMap != null}, Player: {player != null}");
+                
                 // Render map
                 if (mapRenderer != null && currentMap != null)
                 {
+                    Console.WriteLine($"Rendering map: {currentMap.Name} ({currentMap.Width}x{currentMap.Height})");
                     mapRenderer.Render(graphicsSystem);
                 }
                 else
                 {
+                    Console.WriteLine("Using fallback map rendering");
                     // Fallback: render a simple grid pattern
                     RenderFallbackMap();
                 }
@@ -826,7 +922,12 @@ namespace OHRRPGCEDX.Game
                 // Render player
                 if (player != null)
                 {
+                    Console.WriteLine($"Rendering player at position: ({player.Position.X}, {player.Position.Y})");
                     player.Render(graphicsSystem, currentTextures);
+                }
+                else
+                {
+                    Console.WriteLine("Warning: Player is null during rendering");
                 }
                 
                 // Render NPCs and other entities
@@ -840,6 +941,7 @@ namespace OHRRPGCEDX.Game
             catch (Exception ex)
             {
                 loggingSystem?.Error("Game Runtime", $"Playing render error: {ex}");
+                Console.WriteLine($"Render error: {ex}");
             }
         }
         

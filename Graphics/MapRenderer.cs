@@ -38,10 +38,14 @@ namespace OHRRPGCEDX.Graphics
         {
             if (currentMap == null)
             {
+                Console.WriteLine("MapRenderer: No current map, using fallback");
                 RenderFallbackMap(graphicsSystem);
                 return;
             }
 
+            Console.WriteLine($"MapRenderer: Rendering map {currentMap.Name} ({currentMap.Width}x{currentMap.Height})");
+            Console.WriteLine($"MapRenderer: Tileset available: {currentTileset != null}, TileCount: {currentTileset?.TileCount ?? 0}");
+            
             RenderMapLayers(graphicsSystem);
             RenderMapInfo(graphicsSystem);
         }
@@ -66,6 +70,7 @@ namespace OHRRPGCEDX.Graphics
             if (currentMap.LayerData != null && layer < currentMap.LayerData.Length)
             {
                 var layerData = currentMap.LayerData[layer];
+                Console.WriteLine($"MapRenderer: Rendering layer {layer} with {currentMap.Width}x{currentMap.Height} tiles");
                 for (int y = 0; y < currentMap.Height; y++)
                 {
                     for (int x = 0; x < currentMap.Width; x++)
@@ -78,6 +83,7 @@ namespace OHRRPGCEDX.Graphics
             else if (currentMap.Tiles != null)
             {
                 // Fallback to 1D tile array
+                Console.WriteLine($"MapRenderer: Using fallback 1D tiles array, length: {currentMap.Tiles.Length}");
                 for (int y = 0; y < currentMap.Height; y++)
                 {
                     for (int x = 0; x < currentMap.Width; x++)
@@ -91,6 +97,10 @@ namespace OHRRPGCEDX.Graphics
                     }
                 }
             }
+            else
+            {
+                Console.WriteLine("MapRenderer: No tile data available for layer rendering");
+            }
         }
 
         private void RenderTile(GraphicsSystem graphicsSystem, int x, int y, int tileId, int layer)
@@ -101,11 +111,19 @@ namespace OHRRPGCEDX.Graphics
             if (currentTileset != null && tileId >= 0 && tileId < currentTileset.TileCount)
             {
                 // Render actual tile using tileset data
+                if (x == 0 && y == 0) // Only log for first few tiles to avoid spam
+                {
+                    Console.WriteLine($"MapRenderer: Rendering tile {tileId} at ({x},{y}) using tileset data");
+                }
                 RenderTileFromTileset(graphicsSystem, screenX, screenY, tileId, layer);
             }
             else
             {
                 // Fallback to colored rectangle
+                if (x == 0 && y == 0) // Only log for first few tiles to avoid spam
+                {
+                    Console.WriteLine($"MapRenderer: Rendering tile {tileId} at ({x},{y}) using fallback color");
+                }
                 var color = GetTileColor(tileId, layer);
                 graphicsSystem.FillRectangle(screenX, screenY, tileSize, tileSize, color);
                 

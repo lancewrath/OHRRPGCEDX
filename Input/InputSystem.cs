@@ -215,7 +215,9 @@ namespace OHRRPGCEDX.Input
             var now = DateTime.Now;
             
             // Check all keys that are currently pressed
-            foreach (var key in keyBindings.Keys.ToList())
+            // Create a copy of the keys to avoid collection modification during enumeration
+            var keys = keyBindings.Keys.ToList();
+            foreach (var key in keys)
             {
                 bool isCurrentlyPressed = IsKeyPressed(key);
                 
@@ -243,7 +245,9 @@ namespace OHRRPGCEDX.Input
         /// </summary>
         private void UpdateKeyBindings()
         {
-            foreach (var key in keyBindings.Keys)
+            // Create a copy of the keys to avoid collection modification during enumeration
+            var keys = keyBindings.Keys.ToList();
+            foreach (var key in keys)
             {
                 keyBindings[key] = IsKeyPressed(key);
             }
