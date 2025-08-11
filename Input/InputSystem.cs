@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using SharpDX.DirectInput;
 using System.Windows.Forms; // Add this back for Windows Forms Keys support
+using System.Linq; // Added for .ToList()
 
 namespace OHRRPGCEDX.Input
 {
@@ -27,6 +28,25 @@ namespace OHRRPGCEDX.Input
         private Dictionary<Key, bool> keyBindings;
         private Dictionary<string, int> actionBindings;
 
+        // Key repeat system fields
+        private Dictionary<Key, DateTime> keyPressStartTimes;
+        private Dictionary<Key, DateTime> keyLastRepeatTimes;
+        private int initialRepeatDelayMs = 500;  // 500ms initial delay
+        private int repeatIntervalMs = 100;      // 100ms between repeats
+
+        // Key repeat configuration properties
+        public int InitialRepeatDelayMs
+        {
+            get { return initialRepeatDelayMs; }
+            set { initialRepeatDelayMs = Math.Max(100, value); } // Minimum 100ms
+        }
+
+        public int RepeatIntervalMs
+        {
+            get { return repeatIntervalMs; }
+            set { repeatIntervalMs = Math.Max(20, value); } // Minimum 20ms
+        }
+
         public InputSystem()
         {
             gamepads = new List<Joystick>();
@@ -34,6 +54,10 @@ namespace OHRRPGCEDX.Input
             previousGamepadStates = new List<JoystickState>();
             keyBindings = new Dictionary<Key, bool>();
             actionBindings = new Dictionary<string, int>();
+            
+            // Initialize key repeat tracking
+            keyPressStartTimes = new Dictionary<Key, DateTime>();
+            keyLastRepeatTimes = new Dictionary<Key, DateTime>();
         }
 
         /// <summary>
@@ -173,10 +197,44 @@ namespace OHRRPGCEDX.Input
                 
                 // Update key bindings
                 UpdateKeyBindings();
+                
+                // Update key repeat timing
+                UpdateKeyRepeatTiming();
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to update input system: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Update key repeat timing for held keys
+        /// </summary>
+        private void UpdateKeyRepeatTiming()
+        {
+            var now = DateTime.Now;
+            
+            // Check all keys that are currently pressed
+            foreach (var key in keyBindings.Keys.ToList())
+            {
+                bool isCurrentlyPressed = IsKeyPressed(key);
+                
+                if (isCurrentlyPressed)
+                {
+                    // Key is pressed - track timing
+                    if (!keyPressStartTimes.ContainsKey(key))
+                    {
+                        // First time this key was pressed
+                        keyPressStartTimes[key] = now;
+                        keyLastRepeatTimes[key] = now;
+                    }
+                }
+                else
+                {
+                    // Key is not pressed - remove timing data
+                    keyPressStartTimes.Remove(key);
+                    keyLastRepeatTimes.Remove(key);
+                }
             }
         }
 
@@ -248,6 +306,66 @@ namespace OHRRPGCEDX.Input
         public bool IsKeyJustReleased(Keys key)
         {
             return IsKeyJustReleased(ConvertKeys(key));
+        }
+
+        /// <summary>
+        /// Check if a key should repeat (for menu navigation)
+        /// </summary>
+        public bool ShouldKeyRepeat(Key key)
+        {
+            if (!isInitialized || !keyPressStartTimes.ContainsKey(key)) return false;
+            
+            var now = DateTime.Now;
+            var pressStartTime = keyPressStartTimes[key];
+            var lastRepeatTime = keyLastRepeatTimes[key];
+            
+            // Check if we've passed the initial delay
+            if ((now - pressStartTime).TotalMilliseconds < initialRepeatDelayMs)
+                return false;
+            
+            // Check if it's time for the next repeat
+            if ((now - lastRepeatTime).TotalMilliseconds < repeatIntervalMs)
+                return false;
+            
+            // Update the last repeat time
+            keyLastRepeatTimes[key] = now;
+            return true;
+        }
+
+        /// <summary>
+        /// Check if a key should repeat (Windows Forms Keys version)
+        /// </summary>
+        public bool ShouldKeyRepeat(Keys key)
+        {
+            return ShouldKeyRepeat(ConvertKeys(key));
+        }
+
+        /// <summary>
+        /// Reset key repeat timing for a specific key
+        /// Useful when switching between different input contexts (e.g., different menus)
+        /// </summary>
+        public void ResetKeyRepeat(Key key)
+        {
+            keyPressStartTimes.Remove(key);
+            keyLastRepeatTimes.Remove(key);
+        }
+
+        /// <summary>
+        /// Reset key repeat timing for a Windows Forms key
+        /// </summary>
+        public void ResetKeyRepeat(Keys key)
+        {
+            ResetKeyRepeat(ConvertKeys(key));
+        }
+
+        /// <summary>
+        /// Reset all key repeat timing
+        /// Useful when switching between major game states
+        /// </summary>
+        public void ResetAllKeyRepeat()
+        {
+            keyPressStartTimes.Clear();
+            keyLastRepeatTimes.Clear();
         }
 
         /// <summary>

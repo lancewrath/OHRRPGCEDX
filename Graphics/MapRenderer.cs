@@ -27,6 +27,14 @@ namespace OHRRPGCEDX.Graphics
         private int[,] tileData;
         private Dictionary<int, string> tileTextures;
 
+        // Direct2D compatibility constructor
+        public MapRenderer()
+        {
+            // For Direct2D, we don't need Direct3D device objects
+            this.tileTextures = new Dictionary<int, string>();
+            Console.WriteLine("MapRenderer initialized for Direct2D");
+        }
+
         public MapRenderer(SharpDX.Direct3D11.Device device, DeviceContext context, ShaderSystem shaderSystem, TextureManager textureManager)
         {
             this.device = device;

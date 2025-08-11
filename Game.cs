@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Windows.Forms;
+using System.Collections.Generic;
 using System.Drawing;
-using SharpDX;
-using SharpDX.Direct3D11;
-using SharpDX.DXGI;
+using System.Windows.Forms;
+using System.IO;
 using OHRRPGCEDX.Graphics;
-using OHRRPGCEDX.GameData;
 using OHRRPGCEDX.Input;
 using OHRRPGCEDX.Audio;
 using OHRRPGCEDX.Scripting;
@@ -13,6 +11,8 @@ using OHRRPGCEDX.UI;
 using OHRRPGCEDX.Utils;
 using OHRRPGCEDX.Configuration;
 using OHRRPGCEDX.Session;
+using OHRRPGCEDX.GameData;
+
 
 namespace OHRRPGCEDX.Game
 {
@@ -23,8 +23,6 @@ namespace OHRRPGCEDX.Game
     public class GameRuntime : Form
     {
         private GraphicsSystem graphicsSystem;
-        private ShaderSystem shaderSystem;
-        private TextureManager textureManager;
         private InputSystem inputSystem;
         private AudioSystem audioSystem;
         private ScriptEngine scriptEngine;
@@ -93,11 +91,6 @@ namespace OHRRPGCEDX.Game
                 graphicsSystem = new GraphicsSystem();
                 graphicsSystem.Initialize(this.Width, this.Height, false, true, this.Handle);
                 
-                            // Initialize shader and texture systems
-            shaderSystem = new ShaderSystem(graphicsSystem.GetDevice());
-            
-            textureManager = new TextureManager(graphicsSystem.GetDevice());
-                
                 inputSystem = new InputSystem();
                 inputSystem.Initialize();
                 
@@ -115,6 +108,20 @@ namespace OHRRPGCEDX.Game
                 
                 // Initialize MapRenderer after graphics system is ready
                 // mapRenderer will be initialized when we have a map to render
+                if (graphicsSystem != null && currentMap != null)
+                {
+                    try
+                    {
+                        // For Direct2D, we don't need Direct3D device parameters
+                        mapRenderer = new MapRenderer();
+                        // mapRenderer?.SetMap(currentMap); // Commented out until MapRenderer.SetMap is implemented
+                    }
+                    catch (Exception ex)
+                    {
+                        loggingSystem?.Warning("Game Runtime", $"Failed to initialize MapRenderer: {ex.Message}");
+                        mapRenderer = null;
+                    }
+                }
                 
                 loggingSystem.Info("Game Runtime", "Game Runtime systems initialized successfully");
             }
@@ -507,7 +514,7 @@ namespace OHRRPGCEDX.Game
             {
                 if (graphicsSystem?.IsInitialized == true)
                 {
-                    graphicsSystem.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.2f, 0.2f, 0.2f, 1.0f));
+                    graphicsSystem.Clear(Color.FromArgb(255, 51, 51, 51));
                     Console.WriteLine("Rendering loading screen...");
                 }
                 else
@@ -547,7 +554,7 @@ namespace OHRRPGCEDX.Game
             {
                 if (graphicsSystem?.IsInitialized == true)
                 {
-                    graphicsSystem.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.1f, 0.1f, 0.3f, 1.0f));
+                    graphicsSystem.Clear(Color.FromArgb(255, 26, 26, 77));
                     Console.WriteLine("Rendering main menu...");
                 }
                 else
@@ -671,19 +678,15 @@ namespace OHRRPGCEDX.Game
                 }
                 
                 // Set player position
-                player.Position = new Vector2(0, 0); // Default starting position
+                player.Position = new Point(0, 0); // Default starting position
                 
                 // Initialize map renderer with graphics system components
-                if (graphicsSystem != null && currentMap != null && shaderSystem != null && textureManager != null)
+                if (graphicsSystem != null && currentMap != null)
                 {
                     try
                     {
-                        mapRenderer = new MapRenderer(
-                            graphicsSystem.GetDevice(), 
-                            graphicsSystem.GetDeviceContext(), 
-                            shaderSystem, 
-                            textureManager
-                        );
+                        // For Direct2D, we don't need Direct3D device parameters
+                        mapRenderer = new MapRenderer();
                         // mapRenderer?.SetMap(currentMap); // Commented out until MapRenderer.SetMap is implemented
                     }
                     catch (Exception ex)
@@ -735,7 +738,7 @@ namespace OHRRPGCEDX.Game
             try
             {
                 // Clear with a dark green background for the game world
-                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.1f, 0.3f, 0.1f, 1.0f));
+                graphicsSystem?.Clear(Color.FromArgb(255, 26, 77, 26));
                 
                 // Render map
                 // mapRenderer?.Render(); // Commented out until MapRenderer.Render is implemented
@@ -812,7 +815,7 @@ namespace OHRRPGCEDX.Game
             try
             {
                 // Render pause menu overlay with a semi-transparent dark overlay
-                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.0f, 0.0f, 0.0f, 0.7f));
+                graphicsSystem?.Clear(Color.FromArgb(179, 0, 0, 0));
                 Console.WriteLine("Rendering pause menu...");
             }
             catch (Exception ex)
@@ -831,7 +834,7 @@ namespace OHRRPGCEDX.Game
             try
             {
                 // Clear with a dark red background for battle scenes
-                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.3f, 0.1f, 0.1f, 1.0f));
+                graphicsSystem?.Clear(Color.FromArgb(255, 77, 26, 26));
                 
                 // battleSystem?.Render(graphicsSystem); // Commented out until BattleSystem.Render is implemented
                 Console.WriteLine("Rendering battle scene...");
@@ -852,7 +855,7 @@ namespace OHRRPGCEDX.Game
             try
             {
                 // Clear with a dark blue background for menu screens
-                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.1f, 0.1f, 0.4f, 1.0f));
+                graphicsSystem?.Clear(Color.FromArgb(255, 26, 26, 102));
                 Console.WriteLine("Rendering menu...");
             }
             catch (Exception ex)
@@ -871,7 +874,7 @@ namespace OHRRPGCEDX.Game
             try
             {
                 // Clear with a dark purple background for dialog scenes
-                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.2f, 0.1f, 0.3f, 1.0f));
+                graphicsSystem?.Clear(Color.FromArgb(255, 51, 26, 77));
                 Console.WriteLine("Rendering dialog...");
             }
             catch (Exception ex)
@@ -890,7 +893,7 @@ namespace OHRRPGCEDX.Game
             try
             {
                 // Clear with a dark gray background for game over screen
-                graphicsSystem?.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.3f, 0.0f, 0.0f, 1.0f));
+                graphicsSystem?.Clear(Color.FromArgb(255, 77, 0, 0));
                 Console.WriteLine("Rendering game over screen...");
             }
             catch (Exception ex)
@@ -1056,13 +1059,13 @@ namespace OHRRPGCEDX.Game
     /// </summary>
     public class Player
     {
-        public Vector2 Position { get; set; }
+        public Point Position { get; set; }
         public HeroData HeroData { get; private set; }
         
         public void Initialize(HeroData heroData)
         {
             HeroData = heroData;
-            Position = Vector2.Zero;
+            Position = Point.Empty;
         }
         
         public void Update(double deltaTime, InputSystem inputSystem)

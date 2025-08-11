@@ -95,9 +95,9 @@ namespace OHRRPGCEDX
         {
             try
             {
+                // Initialize logging system first
                 loggingSystem = LoggingSystem.Instance;
-                loggingSystem.Initialize();
-                
+                loggingSystem.Initialize("Custom.log");
                 loggingSystem.Info("Custom", "Starting system initialization...");
                 
                 // Ensure the form handle is created before initializing graphics
@@ -121,37 +121,56 @@ namespace OHRRPGCEDX
                 }
                 
                 loggingSystem.Info("Custom", "Graphics system initialized successfully");
-                
+
                 // Initialize input system
                 inputSystem = new InputSystem();
-                inputSystem.Initialize();
-                
+                if (!inputSystem.Initialize())
+                {
+                    loggingSystem.Error("Custom", "Failed to initialize input system");
+                    MessageBox.Show("Failed to initialize input system", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // Configure key repeat timing for menu navigation
+                // Adjust these values to change how responsive the menu feels
+                inputSystem.InitialRepeatDelayMs = 400;  // 400ms initial delay (slightly faster than default)
+                inputSystem.RepeatIntervalMs = 80;       // 80ms between repeats (slightly faster than default)
+
                 // Initialize menu system
                 menuSystem = new MenuSystem();
                 menuSystem.Initialize(graphicsSystem);
-                
-                // Set up menu options
-                var menuOptions = new UI.MenuOptions
-                {
-                    edged = true,
-                    centered = true,
-                    show_numbers = true,
-                    max_width = 0
-                };
-                menuSystem.SetOptions(menuOptions);
-                
-                // Add menu items
-                foreach (var option in mainMenuOptions)
-                {
-                    menuSystem.AddItem(option);
-                }
-                
-                loggingSystem.Info("Custom", "All systems initialized successfully");
+
+                // Set up main menu items
+                SetupMainMenu();
+
+                loggingSystem?.Info("Custom", "All systems initialized successfully");
             }
             catch (Exception ex)
             {
-                loggingSystem.Error("Custom", $"Error initializing systems: {ex.Message}");
-                MessageBox.Show($"Error initializing systems: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                loggingSystem?.Error("Custom", $"Error initializing systems: {ex.Message}");
+                MessageBox.Show($"Failed to initialize systems: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Set up the main editor menu with all options
+        /// </summary>
+        private void SetupMainMenu()
+        {
+            // Set up menu options
+            var menuOptions = new UI.MenuOptions
+            {
+                edged = true,
+                centered = true,
+                show_numbers = true,
+                max_width = 0
+            };
+            menuSystem.SetOptions(menuOptions);
+            
+            // Add menu items
+            foreach (var option in mainMenuOptions)
+            {
+                menuSystem.AddItem(option);
             }
         }
 
@@ -303,11 +322,11 @@ namespace OHRRPGCEDX
 
         private void ProcessStartupMenuInput()
         {
-            if (inputSystem.IsKeyPressed(Keys.Up))
+            if (inputSystem.IsKeyJustPressed(Keys.Up) || inputSystem.ShouldKeyRepeat(Keys.Up))
             {
                 selectedStartupMenuIndex = Math.Max(0, selectedStartupMenuIndex - 1);
             }
-            else if (inputSystem.IsKeyPressed(Keys.Down))
+            else if (inputSystem.IsKeyJustPressed(Keys.Down) || inputSystem.ShouldKeyRepeat(Keys.Down))
             {
                 selectedStartupMenuIndex = Math.Min(startupMenuOptions.Count - 1, selectedStartupMenuIndex + 1);
             }
@@ -332,19 +351,19 @@ namespace OHRRPGCEDX
             if (menuSystem == null) return;
 
             // Handle input for menu navigation
-            if (inputSystem.IsKeyPressed(Keys.Up))
+            if (inputSystem.IsKeyJustPressed(Keys.Up) || inputSystem.ShouldKeyRepeat(Keys.Up))
             {
                 menuSystem.MoveUp();
             }
-            else if (inputSystem.IsKeyPressed(Keys.Down))
+            else if (inputSystem.IsKeyJustPressed(Keys.Down) || inputSystem.ShouldKeyRepeat(Keys.Down))
             {
                 menuSystem.MoveDown();
             }
-            else if (inputSystem.IsKeyPressed(Keys.Left))
+            else if (inputSystem.IsKeyJustPressed(Keys.Left) || inputSystem.ShouldKeyRepeat(Keys.Left))
             {
                 menuSystem.MoveLeft();
             }
-            else if (inputSystem.IsKeyPressed(Keys.Right))
+            else if (inputSystem.IsKeyJustPressed(Keys.Right) || inputSystem.ShouldKeyRepeat(Keys.Right))
             {
                 menuSystem.MoveRight();
             }
@@ -357,6 +376,8 @@ namespace OHRRPGCEDX
             {
                 // Go back to startup menu
                 showingStartupMenu = true;
+                // Reset key repeat timing when switching menus
+                inputSystem.ResetAllKeyRepeat();
                 loggingSystem?.Info("Custom", "Returning to startup menu");
             }
             else if (inputSystem.IsKeyPressed(Keys.F1))
@@ -382,12 +403,16 @@ namespace OHRRPGCEDX
                         // For now, just switch to editor menu
                         // In a real implementation, this would create a new game file
                         showingStartupMenu = false;
+                        // Reset key repeat timing when switching menus
+                        inputSystem.ResetAllKeyRepeat();
                         loggingSystem?.Info("Custom", "Switching to editor menu for new game");
                         break;
                     case 1: // LOAD EXISTING GAME
                         // For now, just switch to editor menu
                         // In a real implementation, this would load an existing game file
                         showingStartupMenu = false;
+                        // Reset key repeat timing when switching menus
+                        inputSystem.ResetAllKeyRepeat();
                         loggingSystem?.Info("Custom", "Switching to editor menu for existing game");
                         break;
                     case 2: // EXIT PROGRAM

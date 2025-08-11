@@ -59,6 +59,10 @@ OHRRPGCEDX/
   - Mouse input (buttons, movement, wheel)
   - Gamepad/Joystick support via DirectInput
   - Action-based input mapping
+  - **Key Repeat System**: Configurable key repeat timing for menu navigation
+    - Initial delay: 400ms (configurable)
+    - Repeat interval: 80ms (configurable)
+    - Prevents rapid menu skipping when holding arrow keys
 
 ### 5. Audio System (`Audio/`)
 - **AudioSystem**: Audio playback and management
@@ -177,6 +181,11 @@ OHRRPGCEDX.Game.exe [rpgfile]
 - **Keyboard**: Full keyboard support with configurable bindings
 - **Mouse**: Multi-button mouse support with wheel
 - **Gamepad**: DirectInput gamepad/joystick support
+- **Key Repeat System**: Intelligent key repeat for menu navigation
+  - Configurable initial delay (400ms default)
+  - Configurable repeat interval (80ms default)
+  - Prevents accidental rapid menu navigation
+  - Resets timing when switching between menus
 
 ### Audio
 - **Formats**: MP3, OGG, WAV, and more
