@@ -52,6 +52,8 @@
     
     <!-- UI system -->
     <Compile Include="UI\MenuSystem.cs" />
+    <Compile Include="UI\FileBrowser.cs" />
+    <Compile Include="UI\FileBrowserRenderer.cs" />
     
     <!-- Utility systems -->
     <Compile Include="Utils\LoggingSystem.cs" />

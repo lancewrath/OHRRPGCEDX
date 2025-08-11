@@ -438,7 +438,22 @@ namespace OHRRPGCEDX.Utils
                 _logQueue.Enqueue(entry);
             }
 
-            _logEvent.Set();
+            // Add safety check to prevent ObjectDisposedException during shutdown
+            try
+            {
+                if (_logEvent != null && !_logEvent.SafeWaitHandle.IsClosed)
+                {
+                    _logEvent.Set();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ignore disposed event exceptions during shutdown
+            }
+            catch (Exception)
+            {
+                // Ignore other event-related exceptions during shutdown
+            }
         }
 
         /// <summary>
@@ -587,7 +602,19 @@ namespace OHRRPGCEDX.Utils
             try
             {
                 _shouldStopLogWriter = true;
-                _logEvent.Set();
+                
+                // Add safety check to prevent ObjectDisposedException during shutdown
+                try
+                {
+                    if (_logEvent != null && !_logEvent.SafeWaitHandle.IsClosed)
+                    {
+                        _logEvent.Set();
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Ignore disposed event exceptions during shutdown
+                }
 
                 if (_logWriterThread != null && _logWriterThread.IsAlive)
                 {

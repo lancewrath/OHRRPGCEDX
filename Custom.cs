@@ -810,5 +810,19 @@ namespace OHRRPGCEDX
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new Custom());
         }
+
+        private void InitializeComponent()
+        {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Custom));
+            this.SuspendLayout();
+            // 
+            // Custom
+            // 
+            this.ClientSize = new System.Drawing.Size(284, 261);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Name = "Custom";
+            this.ResumeLayout(false);
+
+        }
     }
 }

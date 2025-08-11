@@ -35,6 +35,10 @@ namespace OHRRPGCEDX.Game
         private SaveLoadSystem saveLoadSystem;
         private MapRenderer mapRenderer;
         
+        // File browser system
+        private FileBrowser fileBrowser;
+        private FileBrowserRenderer fileBrowserRenderer;
+        
         private bool isRunning = false;
         private Timer gameTimer;
         
@@ -88,8 +92,9 @@ namespace OHRRPGCEDX.Game
                 
                 sessionManager = SessionManager.Instance;
                 
-                graphicsSystem = new GraphicsSystem();
-                graphicsSystem.Initialize(this.Width, this.Height, false, true, this.Handle);
+                // GraphicsSystem will be initialized in OnFormLoad when the window handle is valid
+                // graphicsSystem = new GraphicsSystem();
+                // graphicsSystem.Initialize(this.Width, this.Height, false, true, this.Handle);
                 
                 inputSystem = new InputSystem();
                 inputSystem.Initialize();
@@ -106,22 +111,9 @@ namespace OHRRPGCEDX.Game
                 battleSystem = new BattleSystem();
                 saveLoadSystem = new SaveLoadSystem();
                 
-                // Initialize MapRenderer after graphics system is ready
-                // mapRenderer will be initialized when we have a map to render
-                if (graphicsSystem != null && currentMap != null)
-                {
-                    try
-                    {
-                        // For Direct2D, we don't need Direct3D device parameters
-                        mapRenderer = new MapRenderer();
-                        // mapRenderer?.SetMap(currentMap); // Commented out until MapRenderer.SetMap is implemented
-                    }
-                    catch (Exception ex)
-                    {
-                        loggingSystem?.Warning("Game Runtime", $"Failed to initialize MapRenderer: {ex.Message}");
-                        mapRenderer = null;
-                    }
-                }
+                // File browser system will be initialized after graphics system
+                // fileBrowser = new FileBrowser();
+                // fileBrowserRenderer = new FileBrowserRenderer(fileBrowser, graphicsSystem);
                 
                 loggingSystem.Info("Game Runtime", "Game Runtime systems initialized successfully");
             }
@@ -155,6 +147,17 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
+                // Initialize graphics system now that the window handle is valid
+                graphicsSystem = new GraphicsSystem();
+                if (!graphicsSystem.Initialize(this.Width, this.Height, false, true, this.Handle))
+                {
+                    throw new Exception("Failed to initialize graphics system");
+                }
+                
+                // Initialize file browser system now that graphics system is ready
+                fileBrowser = new FileBrowser();
+                fileBrowserRenderer = new FileBrowserRenderer(fileBrowser, graphicsSystem);
+                
                 // Load default configuration
                 LoadDefaultConfiguration();
                 
@@ -213,17 +216,10 @@ namespace OHRRPGCEDX.Game
         
         private void OnPaint(object sender, PaintEventArgs e)
         {
-            // Don't render from paint events - let the game timer handle rendering
-            // This prevents conflicts with the graphics system
-            // Just clear the background to prevent flickering
-            try
-            {
-                e.Graphics.Clear(System.Drawing.Color.Black);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Paint error: {ex.Message}");
-            }
+            // Completely disable Windows Forms painting - let Direct2D handle everything
+            // This prevents conflicts with the Direct2D graphics system
+            // Just clear the background to prevent flickering, but don't trigger repaints
+            e.Graphics.Clear(System.Drawing.Color.Black);
         }
         
         private void OnKeyDown(object sender, KeyEventArgs e)
@@ -290,6 +286,11 @@ namespace OHRRPGCEDX.Game
                     currentState = GameState.GameOver;
                     Console.WriteLine("Switched to Game Over state");
                     break;
+                case Keys.D9:
+                    currentState = GameState.FileBrowser;
+                    ShowFileBrowser();
+                    Console.WriteLine("Switched to File Browser state");
+                    break;
             }
         }
         
@@ -317,16 +318,26 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
+                Console.WriteLine($"Game timer tick - isRunning: {isRunning}, graphicsSystem: {graphicsSystem != null}, initialized: {graphicsSystem?.IsInitialized}");
+                
                 if (isRunning && graphicsSystem != null && graphicsSystem.IsInitialized)
                 {
                     // Only update if enough time has passed (frame rate limiting)
                     double currentTime = DateTime.Now.Ticks / TimeSpan.TicksPerSecond;
                     double deltaTime = currentTime - (lastFrameTime.Ticks / TimeSpan.TicksPerSecond);
                     
+                    Console.WriteLine($"Delta time: {deltaTime}, target: 0.033");
+                    
                     if (deltaTime >= 0.033) // ~30 FPS
                     {
+                        Console.WriteLine("Calling Update method...");
                         Update();
                         lastFrameTime = DateTime.Now;
+                        Console.WriteLine("Update completed");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Skipping update - not enough time passed");
                     }
                 }
                 else
@@ -346,17 +357,28 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
+                Console.WriteLine($"Update called - State: {currentState}, Graphics initialized: {graphicsSystem?.IsInitialized}");
+                
                 if (graphicsSystem == null || !graphicsSystem.IsInitialized)
                 {
                     Console.WriteLine("Warning: Graphics system not available for update");
                     return;
                 }
 
+                // Update input system
+                Console.WriteLine("Updating input system...");
+                inputSystem?.Update();
+                Console.WriteLine("Input system updated");
+                
                 // Update current game state
+                Console.WriteLine("Updating current state...");
                 UpdateCurrentState(0.016); // Use fixed delta time for now
+                Console.WriteLine("Current state updated");
                 
                 // Render the frame
+                Console.WriteLine("Rendering frame...");
                 RenderFrame();
+                Console.WriteLine("Frame rendered");
                 
                 Console.WriteLine($"Update completed - State: {currentState}");
             }
@@ -372,6 +394,8 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
+                Console.WriteLine($"RenderFrame called - State: {currentState}, Graphics initialized: {graphicsSystem?.IsInitialized}");
+                
                 if (graphicsSystem == null || !graphicsSystem.IsInitialized)
                 {
                     Console.WriteLine("Warning: Graphics system not initialized, skipping render");
@@ -386,14 +410,19 @@ namespace OHRRPGCEDX.Game
                 }
 
                 isRendering = true;
+                Console.WriteLine("Starting Direct2D rendering...");
 
                 // Add a small delay to prevent rapid rendering
                 System.Threading.Thread.Sleep(1);
 
+                Console.WriteLine("Calling BeginScene...");
                 graphicsSystem.BeginScene();
+                Console.WriteLine("BeginScene completed");
                 
                 // Render current game state
+                Console.WriteLine("Calling RenderCurrentState...");
                 RenderCurrentState();
+                Console.WriteLine("RenderCurrentState completed");
                 
                 // Render UI overlays
                 if (currentState != GameState.Loading)
@@ -401,8 +430,13 @@ namespace OHRRPGCEDX.Game
                     // menuSystem?.Render(); // Commented out until MenuSystem.Render is implemented
                 }
                 
+                Console.WriteLine("Calling EndScene...");
                 graphicsSystem.EndScene();
+                Console.WriteLine("EndScene completed");
+                
+                Console.WriteLine("Calling Present...");
                 graphicsSystem.Present();
+                Console.WriteLine("Present completed");
                 
                 Console.WriteLine($"Successfully rendered frame for state: {currentState}");
             }
@@ -435,6 +469,9 @@ namespace OHRRPGCEDX.Game
                 case GameState.MainMenu:
                     UpdateMainMenu(deltaTime);
                     break;
+                case GameState.FileBrowser:
+                    UpdateFileBrowser(deltaTime);
+                    break;
                 case GameState.Playing:
                     UpdatePlaying(deltaTime);
                     break;
@@ -465,6 +502,9 @@ namespace OHRRPGCEDX.Game
                     break;
                 case GameState.MainMenu:
                     RenderMainMenu();
+                    break;
+                case GameState.FileBrowser:
+                    RenderFileBrowser();
                     break;
                 case GameState.Playing:
                     RenderPlaying();
@@ -512,10 +552,18 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
+                Console.WriteLine($"RenderLoading called - Graphics system initialized: {graphicsSystem?.IsInitialized}");
+                
                 if (graphicsSystem?.IsInitialized == true)
                 {
+                    Console.WriteLine("Clearing screen with dark gray color...");
                     graphicsSystem.Clear(Color.FromArgb(255, 51, 51, 51));
-                    Console.WriteLine("Rendering loading screen...");
+                    Console.WriteLine("Screen cleared successfully");
+                    
+                    // Try to draw some text to see if rendering is working
+                    Console.WriteLine("Drawing test text...");
+                    graphicsSystem.DrawText("LOADING...", 400, 300, Color.White, TextAlignment.Center);
+                    Console.WriteLine("Test text drawn successfully");
                 }
                 else
                 {
@@ -525,6 +573,7 @@ namespace OHRRPGCEDX.Game
             catch (Exception ex)
             {
                 Console.WriteLine($"Loading screen rendering failed: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 loggingSystem?.Warning("Game Runtime", $"Loading screen rendering failed: {ex.Message}");
             }
         }
@@ -555,6 +604,19 @@ namespace OHRRPGCEDX.Game
                 if (graphicsSystem?.IsInitialized == true)
                 {
                     graphicsSystem.Clear(Color.FromArgb(255, 26, 26, 77));
+                    
+                    // Draw title
+                    graphicsSystem.DrawText("OHRRPGCE GAME RUNTIME", 4, 4, Color.DarkBlue, TextAlignment.Left);
+                    
+                    // Draw menu options
+                    graphicsSystem.DrawText("Press ENTER to start new game", 4, 50, Color.LightGray, TextAlignment.Left);
+                    graphicsSystem.DrawText("Press L to load saved game", 4, 70, Color.LightGray, TextAlignment.Left);
+                    graphicsSystem.DrawText("Press ESC to exit", 4, 90, Color.LightGray, TextAlignment.Left);
+                    
+                    // Draw footer
+                    graphicsSystem.DrawText("Built 2024 - Direct2D graphics, sdl2 music", 4, 200, Color.Gray, TextAlignment.Left);
+                    graphicsSystem.DrawText("Press F1 for help", 4, 220, Color.Gray, TextAlignment.Left);
+                    
                     Console.WriteLine("Rendering main menu...");
                 }
                 else
@@ -573,40 +635,15 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
-                // Load the RPG file
-                if (string.IsNullOrEmpty(currentRPGPath))
-                {
-                    // Show file dialog to select RPG file
-                    using (OpenFileDialog openDialog = new OpenFileDialog())
-                    {
-                        openDialog.Filter = "OHRRPGCE Game Files (*.rpg)|*.rpg|All Files (*.*)|*.*";
-                        openDialog.Title = "Select Game File";
-                        
-                        if (openDialog.ShowDialog() == DialogResult.OK)
-                        {
-                            currentRPGPath = openDialog.FileName;
-                        }
-                        else
-                        {
-                            return; // User cancelled
-                        }
-                    }
-                }
+                // Show file browser to select RPG file
+                ShowFileBrowser();
                 
-                // Load the game data
-                LoadGameData(currentRPGPath);
-                
-                // Initialize player and starting map
-                InitializeNewGame();
-                
-                // Start playing
-                currentState = GameState.Playing;
-                loggingSystem?.Info("Game Runtime", "New game started");
+                loggingSystem?.Info("Game Runtime", "Starting file browser for loading RPG file");
             }
             catch (Exception ex)
             {
-                loggingSystem?.Error("Game Runtime", $"Failed to start new game: {ex}");
-                MessageBox.Show($"Failed to start game: {ex.Message}", "Game Error", 
+                loggingSystem?.Error("Game Runtime", $"Failed to start file browser: {ex}");
+                MessageBox.Show($"Failed to start file browser: {ex.Message}", "File Browser Error", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -902,6 +939,115 @@ namespace OHRRPGCEDX.Game
             }
         }
         
+        private void RenderFileBrowser()
+        {
+            try
+            {
+                if (fileBrowserRenderer != null)
+                {
+                    fileBrowserRenderer.Render();
+                }
+                else
+                {
+                    Console.WriteLine("Warning: FileBrowserRenderer not initialized.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"File browser rendering failed: {ex.Message}");
+                loggingSystem?.Warning("Game Runtime", $"File browser rendering failed: {ex.Message}");
+            }
+        }
+        
+        private void UpdateFileBrowser(double deltaTime)
+        {
+            if (fileBrowser == null) return;
+
+            // Handle input for file browser navigation
+            if (inputSystem?.IsKeyJustPressed(Keys.Up) == true)
+            {
+                fileBrowser.MoveUp();
+            }
+            else if (inputSystem?.IsKeyJustPressed(Keys.Down) == true)
+            {
+                fileBrowser.MoveDown();
+            }
+            else if (inputSystem?.IsKeyJustPressed(Keys.Enter) == true)
+            {
+                // Navigate to selected entry or select file
+                if (fileBrowser.NavigateToSelected())
+                {
+                    // File was selected, load it and start playing
+                    string selectedPath = fileBrowser.GetSelectedPath();
+                    if (!string.IsNullOrEmpty(selectedPath))
+                    {
+                        loggingSystem?.Info("Game Runtime", $"Selected RPG file: {selectedPath}");
+                        
+                        // Load the RPG file
+                        if (rpgLoader != null)
+                        {
+                            try
+                            {
+                                loggingSystem?.Info("Game Runtime", "Loading RPG file...");
+                                
+                                if (rpgLoader.LoadRPG(selectedPath))
+                                {
+                                    // Load the game data
+                                    currentGameData = rpgLoader.LoadGameData(selectedPath);
+                                    currentRPGPath = selectedPath;
+                                    
+                                    if (currentGameData != null)
+                                    {
+                                        loggingSystem?.Info("Game Runtime", $"Successfully loaded RPG: {currentGameData.General?.GameTitle ?? "Unknown Title"}");
+                                        loggingSystem?.Info("Game Runtime", $"Heroes: {currentGameData.Heroes?.Length ?? 0}, Maps: {currentGameData.Maps?.Length ?? 0}");
+                                        
+                                        // Initialize the game and start playing
+                                        InitializeNewGame();
+                                        currentState = GameState.Playing;
+                                        loggingSystem?.Info("Game Runtime", "Game started successfully");
+                                    }
+                                    else
+                                    {
+                                        loggingSystem?.Error("Game Runtime", "Failed to load game data from RPG file");
+                                        MessageBox.Show("Failed to load game data from RPG file. The file may be corrupted or in an unsupported format.", 
+                                            "Load Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                    }
+                                }
+                                else
+                                {
+                                    loggingSystem?.Error("Game Runtime", "Failed to load RPG file");
+                                    MessageBox.Show("Failed to load RPG file. The file may be corrupted or in an unsupported format.", 
+                                        "Load Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                loggingSystem?.Error("Game Runtime", $"Error loading RPG file: {ex.Message}");
+                                MessageBox.Show($"Error loading RPG file: {ex.Message}", 
+                                    "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (inputSystem?.IsKeyPressed(Keys.Escape) == true)
+            {
+                // Go back to main menu
+                currentState = GameState.MainMenu;
+                loggingSystem?.Info("Game Runtime", "Returning to main menu from file browser");
+            }
+            else if (inputSystem?.IsKeyPressed(Keys.Back) == true)
+            {
+                // Go up a directory
+                fileBrowser.GoUpDirectory();
+            }
+            else if (inputSystem?.IsKeyPressed(Keys.F5) == true)
+            {
+                // Refresh file listing
+                fileBrowser.Refresh();
+            }
+        }
+        
         // Game utility methods
         private void ShowHelp()
         {
@@ -997,6 +1143,22 @@ namespace OHRRPGCEDX.Game
             }
         }
         
+        private void ShowFileBrowser()
+        {
+            currentState = GameState.FileBrowser;
+            
+            // Initialize file browser to the bin/Debug/net48 directory where the test RPG file is located
+            string defaultPath = Path.Combine(Application.StartupPath, "bin", "Debug", "net48");
+            if (!Directory.Exists(defaultPath))
+            {
+                // Fallback to current directory if the expected path doesn't exist
+                defaultPath = Environment.CurrentDirectory;
+            }
+            fileBrowser.Initialize(FileBrowser.BrowseFileType.RPG, defaultPath);
+            
+            loggingSystem?.Info("Game Runtime", "File browser started");
+        }
+        
         /// <summary>
         /// Main entry point for the Game Runtime
         /// </summary>
@@ -1037,8 +1199,22 @@ namespace OHRRPGCEDX.Game
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        private void InitializeComponent()
+        {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(GameRuntime));
+            this.SuspendLayout();
+            // 
+            // GameRuntime
+            // 
+            this.ClientSize = new System.Drawing.Size(284, 261);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Name = "GameRuntime";
+            this.ResumeLayout(false);
+
+        }
     }
-    
+
     /// <summary>
     /// Enumeration of game states
     /// </summary>
@@ -1046,6 +1222,7 @@ namespace OHRRPGCEDX.Game
     {
         Loading,
         MainMenu,
+        FileBrowser,  // New state for file browser
         Playing,
         Paused,
         Battle,
@@ -1115,3 +1292,4 @@ namespace OHRRPGCEDX.Game
         public int EventID { get; set; }
     }
 }
+
