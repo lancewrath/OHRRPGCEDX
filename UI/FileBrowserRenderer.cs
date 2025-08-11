@@ -29,6 +29,9 @@ namespace OHRRPGCEDX.UI
 
             try
             {
+                // Clear the background first to prevent old screens from showing through
+                graphicsSystem.Clear(Color.FromArgb(255, 0, 0, 0)); // Black background like original engine
+                
                 // Draw title
                 string title = "O.H.R.RPG.C.E";
                 graphicsSystem.DrawText(title, 4, 4, Color.DarkBlue, Graphics.TextAlignment.Left);

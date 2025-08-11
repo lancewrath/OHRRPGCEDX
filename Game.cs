@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
+using System.Runtime.InteropServices;
 using OHRRPGCEDX.Graphics;
 using OHRRPGCEDX.Input;
 using OHRRPGCEDX.Audio;
@@ -97,7 +98,14 @@ namespace OHRRPGCEDX.Game
                 // graphicsSystem.Initialize(this.Width, this.Height, false, true, this.Handle);
                 
                 inputSystem = new InputSystem();
-                inputSystem.Initialize();
+                if (!inputSystem.Initialize())
+                {
+                    throw new Exception("Failed to initialize input system");
+                }
+                
+                // Configure key repeat timing to match Custom.cs exactly for consistent responsiveness
+                inputSystem.InitialRepeatDelayMs = 400;  // 400ms initial delay (same as Custom.cs)
+                inputSystem.RepeatIntervalMs = 80;       // 80ms between repeats (same as Custom.cs)
                 
                 audioSystem = new AudioSystem();
                 audioSystem.Initialize();
@@ -137,9 +145,9 @@ namespace OHRRPGCEDX.Game
             this.MouseUp += OnMouseUp;
             this.MouseMove += OnMouseMove;
             
-            // Set up game timer - use a slower interval to prevent SharpDX issues
+            // Set up game timer - use faster interval for better responsiveness
             gameTimer = new Timer();
-            gameTimer.Interval = 33; // ~30 FPS instead of 60 FPS
+            gameTimer.Interval = 16; // ~60 FPS for smooth file browser navigation
             gameTimer.Tick += OnGameTimerTick;
         }
         
@@ -318,37 +326,21 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
-                Console.WriteLine($"Game timer tick - isRunning: {isRunning}, graphicsSystem: {graphicsSystem != null}, initialized: {graphicsSystem?.IsInitialized}");
-                
                 if (isRunning && graphicsSystem != null && graphicsSystem.IsInitialized)
                 {
                     // Only update if enough time has passed (frame rate limiting)
                     double currentTime = DateTime.Now.Ticks / TimeSpan.TicksPerSecond;
                     double deltaTime = currentTime - (lastFrameTime.Ticks / TimeSpan.TicksPerSecond);
                     
-                    Console.WriteLine($"Delta time: {deltaTime}, target: 0.033");
-                    
-                    if (deltaTime >= 0.033) // ~30 FPS
+                    if (deltaTime >= 0.016) // ~60 FPS for better responsiveness
                     {
-                        Console.WriteLine("Calling Update method...");
                         Update();
                         lastFrameTime = DateTime.Now;
-                        Console.WriteLine("Update completed");
                     }
-                    else
-                    {
-                        Console.WriteLine("Skipping update - not enough time passed");
-                    }
-                }
-                else
-                {
-                    Console.WriteLine($"Game timer tick - isRunning: {isRunning}, graphicsSystem: {graphicsSystem != null}, initialized: {graphicsSystem?.IsInitialized}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Game timer tick error: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 loggingSystem?.Error("Game Runtime", $"Game timer tick error: {ex}");
             }
         }
@@ -357,35 +349,23 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
-                Console.WriteLine($"Update called - State: {currentState}, Graphics initialized: {graphicsSystem?.IsInitialized}");
-                
                 if (graphicsSystem == null || !graphicsSystem.IsInitialized)
                 {
-                    Console.WriteLine("Warning: Graphics system not available for update");
                     return;
                 }
 
                 // Update input system
-                Console.WriteLine("Updating input system...");
                 inputSystem?.Update();
-                Console.WriteLine("Input system updated");
                 
                 // Update current game state
-                Console.WriteLine("Updating current state...");
                 UpdateCurrentState(0.016); // Use fixed delta time for now
-                Console.WriteLine("Current state updated");
                 
                 // Render the frame
-                Console.WriteLine("Rendering frame...");
                 RenderFrame();
-                Console.WriteLine("Frame rendered");
                 
-                Console.WriteLine($"Update completed - State: {currentState}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Update error: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 loggingSystem?.Error("Game Runtime", $"Update error: {ex}");
             }
         }
@@ -394,35 +374,26 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
-                Console.WriteLine($"RenderFrame called - State: {currentState}, Graphics initialized: {graphicsSystem?.IsInitialized}");
-                
                 if (graphicsSystem == null || !graphicsSystem.IsInitialized)
                 {
-                    Console.WriteLine("Warning: Graphics system not initialized, skipping render");
                     return;
                 }
 
                 // Prevent multiple simultaneous renders
                 if (isRendering)
                 {
-                    Console.WriteLine("Warning: Already rendering, skipping frame");
                     return;
                 }
 
                 isRendering = true;
-                Console.WriteLine("Starting Direct2D rendering...");
 
-                // Add a small delay to prevent rapid rendering
-                System.Threading.Thread.Sleep(1);
+                // Remove artificial delay - it's not needed and slows down performance
+                // System.Threading.Thread.Sleep(1);
 
-                Console.WriteLine("Calling BeginScene...");
                 graphicsSystem.BeginScene();
-                Console.WriteLine("BeginScene completed");
                 
                 // Render current game state
-                Console.WriteLine("Calling RenderCurrentState...");
                 RenderCurrentState();
-                Console.WriteLine("RenderCurrentState completed");
                 
                 // Render UI overlays
                 if (currentState != GameState.Loading)
@@ -430,27 +401,16 @@ namespace OHRRPGCEDX.Game
                     // menuSystem?.Render(); // Commented out until MenuSystem.Render is implemented
                 }
                 
-                Console.WriteLine("Calling EndScene...");
                 graphicsSystem.EndScene();
-                Console.WriteLine("EndScene completed");
-                
-                Console.WriteLine("Calling Present...");
                 graphicsSystem.Present();
-                Console.WriteLine("Present completed");
                 
-                Console.WriteLine($"Successfully rendered frame for state: {currentState}");
             }
             catch (SharpDX.SharpDXException sdxEx)
             {
-                Console.WriteLine($"SharpDX render error: {sdxEx.Message}");
-                Console.WriteLine($"Result code: {sdxEx.ResultCode}");
-                Console.WriteLine($"Stack trace: {sdxEx.StackTrace}");
                 loggingSystem?.Error("Game Runtime", $"SharpDX render error: {sdxEx}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Render error: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 loggingSystem?.Error("Game Runtime", $"Render error: {ex}");
             }
             finally
@@ -552,28 +512,20 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
-                Console.WriteLine($"RenderLoading called - Graphics system initialized: {graphicsSystem?.IsInitialized}");
-                
                 if (graphicsSystem?.IsInitialized == true)
                 {
-                    Console.WriteLine("Clearing screen with dark gray color...");
                     graphicsSystem.Clear(Color.FromArgb(255, 51, 51, 51));
-                    Console.WriteLine("Screen cleared successfully");
                     
                     // Try to draw some text to see if rendering is working
-                    Console.WriteLine("Drawing test text...");
                     graphicsSystem.DrawText("LOADING...", 400, 300, Color.White, TextAlignment.Center);
-                    Console.WriteLine("Test text drawn successfully");
                 }
                 else
                 {
-                    Console.WriteLine("Warning: Graphics system not available for loading screen");
+                    // Console.WriteLine("Warning: Graphics system not available for loading screen");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Loading screen rendering failed: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 loggingSystem?.Warning("Game Runtime", $"Loading screen rendering failed: {ex.Message}");
             }
         }
@@ -617,16 +569,15 @@ namespace OHRRPGCEDX.Game
                     graphicsSystem.DrawText("Built 2024 - Direct2D graphics, sdl2 music", 4, 200, Color.Gray, TextAlignment.Left);
                     graphicsSystem.DrawText("Press F1 for help", 4, 220, Color.Gray, TextAlignment.Left);
                     
-                    Console.WriteLine("Rendering main menu...");
+                    // Console.WriteLine("Rendering main menu...");
                 }
                 else
                 {
-                    Console.WriteLine("Warning: Graphics system not available for main menu");
+                    // Console.WriteLine("Warning: Graphics system not available for main menu");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Main menu rendering failed: {ex.Message}");
                 loggingSystem?.Warning("Game Runtime", $"Main menu rendering failed: {ex.Message}");
             }
         }
@@ -786,7 +737,7 @@ namespace OHRRPGCEDX.Game
                 // Render NPCs and other entities
                 RenderMapEntities();
                 
-                Console.WriteLine("Rendering game world...");
+                // Console.WriteLine("Rendering game world...");
             }
             catch (Exception ex)
             {
@@ -805,7 +756,7 @@ namespace OHRRPGCEDX.Game
             {
                 // TODO: Render NPCs, events, and other map entities
                 // For now, just log that we're rendering map entities
-                Console.WriteLine("Rendering map entities...");
+                // Console.WriteLine("Rendering map entities...");
             }
             catch (Exception ex)
             {
@@ -853,7 +804,7 @@ namespace OHRRPGCEDX.Game
             {
                 // Render pause menu overlay with a semi-transparent dark overlay
                 graphicsSystem?.Clear(Color.FromArgb(179, 0, 0, 0));
-                Console.WriteLine("Rendering pause menu...");
+                // Console.WriteLine("Rendering pause menu...");
             }
             catch (Exception ex)
             {
@@ -874,7 +825,7 @@ namespace OHRRPGCEDX.Game
                 graphicsSystem?.Clear(Color.FromArgb(255, 77, 26, 26));
                 
                 // battleSystem?.Render(graphicsSystem); // Commented out until BattleSystem.Render is implemented
-                Console.WriteLine("Rendering battle scene...");
+                // Console.WriteLine("Rendering battle scene...");
             }
             catch (Exception ex)
             {
@@ -893,7 +844,7 @@ namespace OHRRPGCEDX.Game
             {
                 // Clear with a dark blue background for menu screens
                 graphicsSystem?.Clear(Color.FromArgb(255, 26, 26, 102));
-                Console.WriteLine("Rendering menu...");
+                // Console.WriteLine("Rendering menu...");
             }
             catch (Exception ex)
             {
@@ -912,7 +863,7 @@ namespace OHRRPGCEDX.Game
             {
                 // Clear with a dark purple background for dialog scenes
                 graphicsSystem?.Clear(Color.FromArgb(255, 51, 26, 77));
-                Console.WriteLine("Rendering dialog...");
+                // Console.WriteLine("Rendering dialog...");
             }
             catch (Exception ex)
             {
@@ -931,7 +882,7 @@ namespace OHRRPGCEDX.Game
             {
                 // Clear with a dark gray background for game over screen
                 graphicsSystem?.Clear(Color.FromArgb(255, 77, 0, 0));
-                Console.WriteLine("Rendering game over screen...");
+                // Console.WriteLine("Rendering game over screen...");
             }
             catch (Exception ex)
             {
@@ -949,12 +900,12 @@ namespace OHRRPGCEDX.Game
                 }
                 else
                 {
-                    Console.WriteLine("Warning: FileBrowserRenderer not initialized.");
+                    // Console.WriteLine("Warning: FileBrowserRenderer not initialized.");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"File browser rendering failed: {ex.Message}");
+                // Console.WriteLine($"File browser rendering failed: {ex.Message}");
                 loggingSystem?.Warning("Game Runtime", $"File browser rendering failed: {ex.Message}");
             }
         }
@@ -963,12 +914,13 @@ namespace OHRRPGCEDX.Game
         {
             if (fileBrowser == null) return;
 
+            // Use the same input handling approach as Custom.cs for consistent responsiveness
             // Handle input for file browser navigation
-            if (inputSystem?.IsKeyJustPressed(Keys.Up) == true)
+            if (inputSystem?.IsKeyJustPressed(Keys.Up) == true || inputSystem?.ShouldKeyRepeat(Keys.Up) == true)
             {
                 fileBrowser.MoveUp();
             }
-            else if (inputSystem?.IsKeyJustPressed(Keys.Down) == true)
+            else if (inputSystem?.IsKeyJustPressed(Keys.Down) == true || inputSystem?.ShouldKeyRepeat(Keys.Down) == true)
             {
                 fileBrowser.MoveDown();
             }
@@ -1034,6 +986,7 @@ namespace OHRRPGCEDX.Game
             {
                 // Go back to main menu
                 currentState = GameState.MainMenu;
+                inputSystem.ResetAllKeyRepeat();
                 loggingSystem?.Info("Game Runtime", "Returning to main menu from file browser");
             }
             else if (inputSystem?.IsKeyPressed(Keys.Back) == true)
@@ -1147,7 +1100,7 @@ namespace OHRRPGCEDX.Game
         {
             currentState = GameState.FileBrowser;
             
-            // Initialize file browser to the bin/Debug/net48 directory where the test RPG file is located
+            // Use the exact same path initialization logic as Custom.cs for consistent behavior
             string defaultPath = Path.Combine(Application.StartupPath, "bin", "Debug", "net48");
             if (!Directory.Exists(defaultPath))
             {
@@ -1256,11 +1209,11 @@ namespace OHRRPGCEDX.Game
             {
                 // TODO: Implement proper player sprite rendering
                 // For now, just log that we're rendering the player
-                Console.WriteLine($"Rendering player at position: {Position}");
+                // Console.WriteLine($"Rendering player at position: {Position}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Warning: Player rendering failed: {ex.Message}");
+                // Console.WriteLine($"Warning: Player rendering failed: {ex.Message}");
             }
         }
     }

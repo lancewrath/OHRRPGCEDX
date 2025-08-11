@@ -31,8 +31,8 @@ namespace OHRRPGCEDX.Input
         // Key repeat system fields
         private Dictionary<Key, DateTime> keyPressStartTimes;
         private Dictionary<Key, DateTime> keyLastRepeatTimes;
-        private int initialRepeatDelayMs = 500;  // 500ms initial delay
-        private int repeatIntervalMs = 100;      // 100ms between repeats
+        private int initialRepeatDelayMs = 150;  // 150ms initial delay (much more responsive)
+        private int repeatIntervalMs = 50;       // 50ms between repeats (much faster)
 
         // Key repeat configuration properties
         public int InitialRepeatDelayMs
