@@ -833,12 +833,52 @@ namespace OHRRPGCEDX
         public int[] AnimationFrames { get; set; }
         public int Width { get; set; }
         public int Height { get; set; }
+        
+        // Additional properties for tileset graphics
+        public int ID { get; set; }
+        public int TileCount { get; set; }
+        public int TileSize { get; set; }
+        public bool HasAnimations { get; set; }
+        public byte[][] TileGraphics { get; set; }
+        public byte[] Palette { get; set; }
+        public TileAnimation[] Animations { get; set; }
+        public Dictionary<string, string> Metadata { get; set; }
 
         public TilesetData()
         {
+            Name = "";
             Tiles = new int[1000];
             Passability = new int[1000];
             AnimationFrames = new int[1000];
+            Width = 0;
+            Height = 0;
+            ID = -1;
+            TileCount = 0;
+            TileSize = 32; // Default tile size
+            HasAnimations = false;
+            TileGraphics = new byte[0][];
+            Palette = new byte[0];
+            Animations = new TileAnimation[0];
+            Metadata = new Dictionary<string, string>();
+        }
+    }
+
+    /// <summary>
+    /// Tile animation data for tilesets
+    /// </summary>
+    public class TileAnimation
+    {
+        public int TileID { get; set; }
+        public int FrameCount { get; set; }
+        public int FrameDelay { get; set; }
+        public int[] Frames { get; set; }
+
+        public TileAnimation()
+        {
+            TileID = -1;
+            FrameCount = 0;
+            FrameDelay = 0;
+            Frames = new int[0];
         }
     }
 
@@ -2311,6 +2351,139 @@ namespace OHRRPGCEDX
             Y = 0;
             Trigger = EventTrigger.None;
             Script = -1;
+        }
+    }
+
+    /// <summary>
+    /// Map class for the game runtime
+    /// </summary>
+    public class Map
+    {
+        public string Name { get; set; }
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public int[] Tiles { get; set; }
+        public int[] Passability { get; set; }
+        public NPCData[] NPCs { get; set; }
+        public DoorData[] Doors { get; set; }
+        public int TilesetId { get; set; }
+        public int BackgroundMusic { get; set; }
+        public int Layers { get; set; }
+        public int[][,] LayerData { get; set; }
+        public MapEvent[] Events { get; set; }
+        
+        public Map()
+        {
+            Name = "";
+            Width = 0;
+            Height = 0;
+            Tiles = new int[0];
+            Passability = new int[0];
+            NPCs = new NPCData[0];
+            Doors = new DoorData[0];
+            TilesetId = -1;
+            BackgroundMusic = -1;
+            Layers = 1;
+            LayerData = new int[1][,];
+            Events = new MapEvent[0];
+        }
+        
+        public void Update(double deltaTime)
+        {
+            // Update NPCs
+            if (NPCs != null)
+            {
+                foreach (var npc in NPCs)
+                {
+                    if (npc.Active)
+                    {
+                        UpdateNPC(npc, deltaTime);
+                    }
+                }
+            }
+            
+            // Update events
+            if (Events != null)
+            {
+                foreach (var evt in Events)
+                {
+                    UpdateEvent(evt, deltaTime);
+                }
+            }
+        }
+        
+        private void UpdateNPC(NPCData npc, double deltaTime)
+        {
+            // TODO: Implement NPC AI and movement
+            // For now, NPCs are static
+        }
+        
+        private void UpdateEvent(MapEvent evt, double deltaTime)
+        {
+            // TODO: Implement event triggers and scripts
+            // For now, events are static
+        }
+        
+        public bool IsPassable(int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= Width || y >= Height)
+                return false;
+                
+            if (Passability != null && Passability.Length > 0)
+            {
+                int index = y * Width + x;
+                if (index < Passability.Length)
+                {
+                    return Passability[index] != 0;
+                }
+            }
+            
+            // Default to passable if no passability data
+            return true;
+        }
+        
+        public int GetTile(int x, int y, int layer = 0)
+        {
+            if (x < 0 || y < 0 || x >= Width || y >= Height || layer < 0 || layer >= Layers)
+                return -1;
+                
+            if (LayerData != null && LayerData.Length > layer && LayerData[layer] != null)
+            {
+                return LayerData[layer][x, y];
+            }
+            
+            // Fallback to 1D tiles array
+            if (Tiles != null && Tiles.Length > 0)
+            {
+                int index = y * Width + x;
+                if (index < Tiles.Length)
+                {
+                    return Tiles[index];
+                }
+            }
+            
+            return -1;
+        }
+    }
+
+    /// <summary>
+    /// Equipment data for heroes
+    /// </summary>
+    public class EquipmentData
+    {
+        public string Weapon { get; set; }
+        public string Shield { get; set; }
+        public string Armor { get; set; }
+        public string Helmet { get; set; }
+        public string Accessory { get; set; }
+        
+        public EquipmentData()
+        {
+            Weapon = null;
+            Shield = null;
+            Armor = null;
+            Helmet = null;
+            Accessory = null;
         }
     }
 }

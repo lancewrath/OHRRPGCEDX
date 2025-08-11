@@ -1152,9 +1152,85 @@ namespace OHRRPGCEDX.GameData
 
             try
             {
-                // TODO: Implement tileset data parsing
-                Console.WriteLine($"Tileset {tilesetId} data parsing not yet implemented");
-                return new TilesetData();
+                var tileset = new TilesetData();
+                tileset.ID = tilesetId;
+                
+                int tileCount = 0;
+                int tileSize = 0;
+                bool hasAnimations = false;
+                
+                using (var stream = new MemoryStream(data))
+                using (var reader = new BinaryReader(stream))
+                {
+                    // Read tileset header
+                    var magic = ReadFixedString(reader, 4);
+                    if (magic != "RGFX")
+                    {
+                        Console.WriteLine($"Invalid tileset format: {magic}");
+                        return null;
+                    }
+                    
+                    var version = reader.ReadInt32();
+                    tileCount = reader.ReadInt32();
+                    tileSize = reader.ReadInt32();
+                    hasAnimations = reader.ReadBoolean();
+                    
+                    tileset.TileCount = tileCount;
+                    tileset.TileSize = tileSize;
+                    tileset.HasAnimations = hasAnimations;
+                    
+                    // Read tile graphics data
+                    tileset.TileGraphics = new byte[tileCount][];
+                    for (int i = 0; i < tileCount; i++)
+                    {
+                        var tileDataSize = reader.ReadInt32();
+                        tileset.TileGraphics[i] = new byte[tileDataSize];
+                        reader.Read(tileset.TileGraphics[i], 0, tileDataSize);
+                    }
+                    
+                    // Read palette data
+                    var paletteSize = reader.ReadInt32();
+                    tileset.Palette = new byte[paletteSize];
+                    reader.Read(tileset.Palette, 0, paletteSize);
+                    
+                    // Read animation data if present
+                    if (hasAnimations)
+                    {
+                        var animCount = reader.ReadInt32();
+                        tileset.Animations = new TileAnimation[animCount];
+                        
+                        for (int i = 0; i < animCount; i++)
+                        {
+                            var anim = new TileAnimation();
+                            anim.TileID = reader.ReadInt32();
+                            anim.FrameCount = reader.ReadInt32();
+                            anim.FrameDelay = reader.ReadInt32();
+                            anim.Frames = new int[anim.FrameCount];
+                            
+                            for (int j = 0; j < anim.FrameCount; j++)
+                            {
+                                anim.Frames[j] = reader.ReadInt32();
+                            }
+                            
+                            tileset.Animations[i] = anim;
+                        }
+                    }
+                    
+                    // Read metadata
+                    var metadataCount = reader.ReadInt32();
+                    tileset.Metadata = new Dictionary<string, string>();
+                    for (int i = 0; i < metadataCount; i++)
+                    {
+                        var keyLength = reader.ReadInt32();
+                        var key = ReadFixedString(reader, keyLength);
+                        var valueLength = reader.ReadInt32();
+                        var value = ReadFixedString(reader, valueLength);
+                        tileset.Metadata[key] = value;
+                    }
+                }
+                
+                Console.WriteLine($"Loaded tileset {tilesetId}: {tileCount} tiles, {tileSize}x{tileSize}, animations: {hasAnimations}");
+                return tileset;
             }
             catch (Exception ex)
             {

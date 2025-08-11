@@ -1,171 +1,145 @@
 using System;
-using System.Collections.Generic;
-using SharpDX;
-using SharpDX.Direct3D;
-using SharpDX.Direct3D11;
-using SharpDX.DXGI;
-using SharpDX.Mathematics.Interop;
+using System.Drawing;
+using OHRRPGCEDX.Graphics;
 
 namespace OHRRPGCEDX.Graphics
 {
+    /// <summary>
+    /// Sprite rendering system for OHRRPGCE (Direct2D compatible)
+    /// </summary>
     public class Sprite : IDisposable
     {
-        private SharpDX.Direct3D11.Device device;
-        private DeviceContext context;
-        private ShaderSystem shaderSystem;
-        private TextureManager textureManager;
-        private SharpDX.Direct3D11.Buffer vertexBuffer;
-        private SharpDX.Direct3D11.Buffer indexBuffer;
-        private bool isDisposed = false;
-
-        // Sprite properties
-        private Vector2 position;
-        private Vector2 size;
-        private float rotation;
-        private Vector2 scale;
-        private Vector4 color;
+        private Point position;
+        private Size size;
+        private float scale;
+        private Color color;
         private string texturePath;
-        private ShaderResourceView texture;
-
-        // Animation properties
+        private SharpDX.Direct2D1.Bitmap texture;
         private int currentFrame;
         private int totalFrames;
-        private float frameTime;
         private float animationSpeed;
-        private bool isAnimating;
+        private float animationTimer;
 
-        public Sprite(SharpDX.Direct3D11.Device device, DeviceContext context, ShaderSystem shaderSystem, TextureManager textureManager)
+        public Point Position { get => position; set => position = value; }
+        public Size Size { get => size; set => size = value; }
+        public float Scale { get => scale; set => scale = value; }
+        public Color Color { get => color; set => color = value; }
+        public string TexturePath { get => texturePath; }
+        public SharpDX.Direct2D1.Bitmap Texture { get => texture; }
+        public int CurrentFrame { get => currentFrame; set => currentFrame = value; }
+        public int TotalFrames { get => totalFrames; set => totalFrames = value; }
+        public float AnimationSpeed { get => animationSpeed; set => animationSpeed = value; }
+
+        public Sprite()
         {
-            this.device = device;
-            this.context = context;
-            this.shaderSystem = shaderSystem;
-            this.textureManager = textureManager;
-            
-            // Initialize default values
-            position = Vector2.Zero;
-            size = new Vector2(32, 32); // Default sprite size
-            rotation = 0.0f;
-            scale = Vector2.One;
-            color = Vector4.One;
+            position = new Point(0, 0);
+            size = new Size(32, 32);
+            scale = 1.0f;
+            color = Color.White;
+            texturePath = "";
+            texture = null;
             currentFrame = 0;
             totalFrames = 1;
-            frameTime = 0.0f;
             animationSpeed = 1.0f;
-            isAnimating = false;
+            animationTimer = 0.0f;
         }
 
         public bool LoadTexture(string filePath)
         {
-            try
+            texturePath = filePath;
+            // Actual texture loading will be done by the texture manager
+            return true;
+        }
+
+        public void SetTexture(SharpDX.Direct2D1.Bitmap bitmap)
+        {
+            texture = bitmap;
+            if (bitmap != null)
             {
-                texturePath = filePath;
-                texture = textureManager.LoadTexture(filePath);
-                return texture != null;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to load texture for sprite: {ex.Message}");
-                return false;
+                // Convert from SharpDX.Size2F (float) to System.Drawing.Size (int)
+                size = new Size((int)bitmap.Size.Width, (int)bitmap.Size.Height);
             }
         }
 
-        public void SetPosition(Vector2 newPosition)
+        public void SetPosition(Point newPosition)
         {
             position = newPosition;
         }
 
-        public void SetSize(Vector2 newSize)
+        public void SetSize(Size newSize)
         {
             size = newSize;
         }
 
-        public void SetRotation(float newRotation)
-        {
-            rotation = newRotation;
-        }
-
-        public void SetScale(Vector2 newScale)
+        public void SetScale(float newScale)
         {
             scale = newScale;
         }
 
-        public void SetColor(Vector4 newColor)
+        public void SetColor(Color newColor)
         {
             color = newColor;
         }
 
-        public void SetAnimation(int frames, float speed)
-        {
-            totalFrames = Math.Max(1, frames);
-            animationSpeed = speed;
-            isAnimating = speed > 0;
-            currentFrame = 0;
-            frameTime = 0.0f;
-        }
-
         public void Update(float deltaTime)
         {
-            if (!isAnimating) return;
-
-            frameTime += deltaTime * animationSpeed;
-            if (frameTime >= 1.0f)
+            if (totalFrames > 1)
             {
-                frameTime -= 1.0f;
-                currentFrame = (currentFrame + 1) % totalFrames;
+                animationTimer += deltaTime * animationSpeed;
+                if (animationTimer >= 1.0f)
+                {
+                    currentFrame = (currentFrame + 1) % totalFrames;
+                    animationTimer = 0.0f;
+                }
             }
         }
 
-        public void Render(Matrix worldViewProjection)
+        public void Render(GraphicsSystem graphicsSystem)
         {
-            if (isDisposed || texture == null)
-                return;
-
-            try
+            if (texture != null)
             {
-                // Set shaders and input layout
-                context.InputAssembler.SetVertexBuffers(0, new VertexBufferBinding(vertexBuffer, Utilities.SizeOf<VertexPositionColor>(), 0));
-                context.InputAssembler.SetIndexBuffer(indexBuffer, Format.R32_UInt, 0);
-                context.InputAssembler.PrimitiveTopology = PrimitiveTopology.TriangleList;
+                // Draw actual texture
+                var destX = position.X;
+                var destY = position.Y;
+                var destWidth = (int)(size.Width * scale);
+                var destHeight = (int)(size.Height * scale);
 
-                context.VertexShader.Set(shaderSystem.GetSpriteVertexShader());
-                context.PixelShader.Set(shaderSystem.GetSpritePixelShader());
-                context.InputAssembler.InputLayout = shaderSystem.GetSpriteInputLayout();
-
-                // Set texture
-                context.PixelShader.SetShaderResource(0, texture);
-
-                // TODO: Set constant buffer with worldViewProjection matrix and sprite transform
-                // For now, we'll just render without transformations
-                
-                // Draw the sprite
-                context.DrawIndexed(6, 0, 0); // 6 indices for a quad (2 triangles)
+                if (totalFrames > 1)
+                {
+                    // Animated sprite - draw current frame
+                    var frameWidth = (int)(size.Width / totalFrames);
+                    var sourceX = (int)(currentFrame * frameWidth);
+                    graphicsSystem.DrawSpriteRegion(texture, sourceX, 0, frameWidth, size.Height, destX, destY);
+                }
+                else
+                {
+                    // Static sprite
+                    graphicsSystem.DrawSprite(texture, destX, destY, scale, scale, 1.0f);
+                }
             }
-            catch (Exception ex)
+            else
             {
-                Console.WriteLine($"Error rendering sprite: {ex.Message}");
+                // Fallback to colored rectangle
+                var destX = position.X;
+                var destY = position.Y;
+                var destWidth = (int)(size.Width * scale);
+                var destHeight = (int)(size.Height * scale);
+
+                graphicsSystem.FillRectangle(destX, destY, destWidth, destHeight, color);
+                graphicsSystem.DrawRectangle(destX, destY, destWidth, destHeight, Color.Black, 1.0f);
+
+                // Draw frame info for debugging
+                if (totalFrames > 1)
+                {
+                    graphicsSystem.DrawText($"Frame: {currentFrame + 1}/{totalFrames}", destX + 2, destY + 2, Color.White);
+                }
             }
         }
 
         public void Dispose()
         {
-            if (!isDisposed)
-            {
-                vertexBuffer?.Dispose();
-                indexBuffer?.Dispose();
-                isDisposed = true;
-            }
+            // No Direct3D resources to dispose
+            texture = null;
         }
-
-        public bool IsDisposed => isDisposed;
-
-        // Getters for sprite properties
-        public Vector2 Position => position;
-        public Vector2 Size => size;
-        public float Rotation => rotation;
-        public Vector2 Scale => scale;
-        public Vector4 Color => color;
-        public bool IsAnimating => isAnimating;
-        public int CurrentFrame => currentFrame;
-        public int TotalFrames => totalFrames;
     }
 }

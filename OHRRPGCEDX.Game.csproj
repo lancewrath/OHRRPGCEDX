@@ -35,6 +35,7 @@
     <Compile Include="Graphics\GameWindow.cs" />
     <Compile Include="Graphics\ShaderSystem.cs" />
     <Compile Include="Graphics\TextureManager.cs" />
+    <Compile Include="Graphics\Direct2DTextureManager.cs" />
     
     <!-- Game data system -->
     <Compile Include="GameData\BattleSystem.cs" />

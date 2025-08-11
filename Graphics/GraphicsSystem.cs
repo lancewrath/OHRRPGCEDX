@@ -43,6 +43,9 @@ namespace OHRRPGCEDX.Graphics
         private SharpDX.DirectWrite.TextFormat textFormat;
         private SharpDX.DirectWrite.TextFormat smallTextFormat;
         
+        // Texture manager
+        // private Direct2DTextureManager textureManager;
+        
         private int screenWidth;
         private int screenHeight;
         private bool fullscreen;
@@ -116,6 +119,9 @@ namespace OHRRPGCEDX.Graphics
 
                 // Create text formats
                 CreateTextFormats();
+
+                // Create texture manager
+                // textureManager = new Direct2DTextureManager(renderTarget);
 
                 IsInitialized = true;
                 LoggingSystem.Instance.Info("Graphics", "Graphics system initialized successfully");
@@ -436,26 +442,80 @@ namespace OHRRPGCEDX.Graphics
             Clear();
         }
 
+        /// <summary>
+        /// Draw a tile from a tileset
+        /// </summary>
+        public void DrawTile(SharpDX.Direct2D1.Bitmap tileset, int tileX, int tileY, int tileSize, int destX, int destY, float opacity = 1.0f)
+        {
+            if (tileset == null) return;
+
+            var sourceRect = new RawRectangleF(tileX * tileSize, tileY * tileSize, (tileX + 1) * tileSize, (tileY + 1) * tileSize);
+            var destRect = new RawRectangleF(destX, destY, destX + tileSize, destY + tileSize);
+
+            renderTarget.DrawBitmap(tileset, destRect, opacity, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, sourceRect);
+        }
+
+        /// <summary>
+        /// Draw a sprite (texture) at the specified position
+        /// </summary>
+        public void DrawSprite(SharpDX.Direct2D1.Bitmap texture, int x, int y, float opacity = 1.0f)
+        {
+            if (texture == null) return;
+
+            var destRect = new RawRectangleF(x, y, x + texture.Size.Width, y + texture.Size.Height);
+            renderTarget.DrawBitmap(texture, destRect, opacity, SharpDX.Direct2D1.BitmapInterpolationMode.Linear);
+        }
+
+        /// <summary>
+        /// Draw a sprite (texture) at the specified position with scaling
+        /// </summary>
+        public void DrawSprite(SharpDX.Direct2D1.Bitmap texture, int x, int y, float scaleX, float scaleY, float opacity = 1.0f)
+        {
+            if (texture == null) return;
+
+            var destRect = new RawRectangleF(x, y, x + texture.Size.Width * scaleX, y + texture.Size.Height * scaleY);
+            renderTarget.DrawBitmap(texture, destRect, opacity, SharpDX.Direct2D1.BitmapInterpolationMode.Linear);
+        }
+
+        /// <summary>
+        /// Draw a portion of a sprite (texture) at the specified position
+        /// </summary>
+        public void DrawSpriteRegion(SharpDX.Direct2D1.Bitmap texture, int sourceX, int sourceY, int sourceWidth, int sourceHeight, int destX, int destY, float opacity = 1.0f)
+        {
+            if (texture == null) return;
+
+            var sourceRect = new RawRectangleF(sourceX, sourceY, sourceX + sourceWidth, sourceY + sourceHeight);
+            var destRect = new RawRectangleF(destX, destY, destX + sourceWidth, destY + sourceHeight);
+
+            renderTarget.DrawBitmap(texture, destRect, opacity, SharpDX.Direct2D1.BitmapInterpolationMode.Linear, sourceRect);
+        }
+
+        /// <summary>
+        /// Get the texture manager
+        /// </summary>
+        // public Direct2DTextureManager TextureManager => textureManager;
+
+        private bool isDisposed = false;
         public void Dispose()
         {
-            // Dispose brushes
-            whiteBrush?.Dispose();
-            blackBrush?.Dispose();
-            grayBrush?.Dispose();
-            blueBrush?.Dispose();
-            greenBrush?.Dispose();
-            redBrush?.Dispose();
-            orangeBrush?.Dispose();
-            darkGrayBrush?.Dispose();
-            
-            // Dispose text formats
-            textFormat?.Dispose();
-            smallTextFormat?.Dispose();
-            
-            // Dispose render target and factories
-            renderTarget?.Dispose();
-            factory?.Dispose();
-            dwFactory?.Dispose();
+            if (!isDisposed)
+            {
+                // textureManager?.Dispose(); // This line was commented out
+                whiteBrush?.Dispose();
+                blackBrush?.Dispose();
+                grayBrush?.Dispose();
+                blueBrush?.Dispose();
+                greenBrush?.Dispose();
+                redBrush?.Dispose();
+                orangeBrush?.Dispose();
+                darkGrayBrush?.Dispose();
+                textFormat?.Dispose();
+                smallTextFormat?.Dispose();
+                renderTarget?.Dispose();
+                factory?.Dispose();
+                dwFactory?.Dispose();
+                isDisposed = true;
+            }
         }
     }
 }

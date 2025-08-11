@@ -51,6 +51,10 @@ namespace OHRRPGCEDX.Game
         private Map currentMap;
         private bool gamePaused = false;
         
+        // Game data for rendering
+        private TilesetData currentTileset;
+        private TextureData[] currentTextures;
+        
         // Game loop timing
         private DateTime lastFrameTime;
         private const int TARGET_FPS = 60;
@@ -587,12 +591,94 @@ namespace OHRRPGCEDX.Game
                     throw new Exception("Failed to load RPG file");
                 }
                 
+                // Log loaded game information
                 loggingSystem?.Info("Game Runtime", $"Game data loaded: {rpgPath}");
+                if (currentGameData.General != null)
+                {
+                    loggingSystem?.Info("Game Runtime", $"Title: {currentGameData.General.GameTitle}");
+                    loggingSystem?.Info("Game Runtime", $"Author: {currentGameData.General.Author}");
+                    loggingSystem?.Info("Game Runtime", $"Heroes: {currentGameData.Heroes?.Length ?? 0}");
+                    loggingSystem?.Info("Game Runtime", $"Maps: {currentGameData.Maps?.Length ?? 0}");
+                    loggingSystem?.Info("Game Runtime", $"Items: {currentGameData.Items?.Length ?? 0}");
+                }
+                
+                // Load tileset data for map rendering
+                LoadTilesetData();
+                
+                // Load texture data for sprites
+                LoadTextureData();
+                
+                loggingSystem?.Info("Game Runtime", "Game data loading completed successfully");
             }
             catch (Exception ex)
             {
                 loggingSystem?.Error("Game Runtime", $"Failed to load game data: {ex}");
                 throw;
+            }
+        }
+        
+        private void LoadTilesetData()
+        {
+            if (currentGameData?.Maps != null && currentGameData.Maps.Length > 0)
+            {
+                var firstMap = currentGameData.Maps[0];
+                if (firstMap.TilesetId >= 0)
+                {
+                    currentTileset = rpgLoader.LoadTilesetData(firstMap.TilesetId);
+                    if (currentTileset != null)
+                    {
+                        Console.WriteLine($"Loaded tileset {firstMap.TilesetId} with {currentTileset.TileCount} tiles");
+                        
+                        // Load tileset texture using Direct2D texture manager
+                        // TODO: Re-enable when Direct2DTextureManager is working
+                        /*
+                        if (graphicsSystem?.TextureManager != null && currentTileset.TileGraphics != null)
+                        {
+                            try
+                            {
+                                var tilesetBitmap = graphicsSystem.TextureManager.LoadTilesetFromTiles(
+                                    $"tileset_{firstMap.TilesetId}",
+                                    currentTileset.TileGraphics,
+                                    currentTileset.TileSize,
+                                    currentTileset.TileCount,
+                                    currentTileset.Palette
+                                );
+                                
+                                if (tilesetBitmap != null)
+                                {
+                                    mapRenderer?.SetTilesetBitmap(tilesetBitmap);
+                                    Console.WriteLine($"Tileset texture loaded successfully");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Failed to load tileset texture: {ex.Message}");
+                            }
+                        }
+                        */
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to load tileset {firstMap.TilesetId}");
+                    }
+                }
+            }
+        }
+        
+        private void LoadTextureData()
+        {
+            try
+            {
+                if (currentGameData?.Textures != null)
+                {
+                    loggingSystem?.Info("Game Runtime", $"Loaded {currentGameData.Textures.Length} textures");
+                    // Store texture data for sprite rendering
+                    currentTextures = currentGameData.Textures;
+                }
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Warning("Game Runtime", $"Failed to load texture data: {ex.Message}");
             }
         }
         
@@ -610,15 +696,60 @@ namespace OHRRPGCEDX.Game
                 // Load starting map
                 if (currentGameData.Maps != null && currentGameData.Maps.Length > 0)
                 {
+                    var mapData = currentGameData.Maps[0];
                     currentMap = new Map();
-                    currentMap.Name = currentGameData.Maps[0].Name;
-                    currentMap.Width = currentGameData.Maps[0].Width;
-                    currentMap.Height = currentGameData.Maps[0].Height;
-                    // TODO: Convert MapData to Map format
+                    currentMap.Name = mapData.Name;
+                    currentMap.Width = mapData.Width;
+                    currentMap.Height = mapData.Height;
+                    currentMap.Tiles = mapData.Tiles;
+                    currentMap.Passability = mapData.Passability;
+                    currentMap.NPCs = mapData.NPCs;
+                    currentMap.Doors = mapData.Doors;
+                    currentMap.TilesetId = mapData.TilesetId;
+                    currentMap.BackgroundMusic = mapData.BackgroundMusic;
+                    
+                    // Convert layer data if available
+                    if (mapData.LayerData != null && mapData.LayerData.Length > 0)
+                    {
+                        currentMap.Layers = mapData.LayerData.Length;
+                        currentMap.LayerData = mapData.LayerData;
+                    }
+                    else
+                    {
+                        // Fallback to single layer with tiles array
+                        currentMap.Layers = 1;
+                        currentMap.LayerData = new int[1][,];
+                        currentMap.LayerData[0] = new int[mapData.Width, mapData.Height];
+                        
+                        // Convert 1D tiles array to 2D if needed
+                        if (mapData.Tiles != null && mapData.Tiles.Length > 0)
+                        {
+                            for (int x = 0; x < mapData.Width; x++)
+                            {
+                                for (int y = 0; y < mapData.Height; y++)
+                                {
+                                    int index = y * mapData.Width + x;
+                                    if (index < mapData.Tiles.Length)
+                                    {
+                                        currentMap.LayerData[0][x, y] = mapData.Tiles[index];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    loggingSystem?.Info("Game Runtime", $"Map initialized: {currentMap.Name} ({currentMap.Width}x{currentMap.Height})");
                 }
                 
-                // Set player position
-                player.Position = new Point(0, 0); // Default starting position
+                // Set player position (default to center of map)
+                if (currentMap != null)
+                {
+                    player.Position = new Point(currentMap.Width / 2, currentMap.Height / 2);
+                }
+                else
+                {
+                    player.Position = new Point(0, 0); // Default starting position
+                }
                 
                 // Initialize map renderer with graphics system components
                 if (graphicsSystem != null && currentMap != null)
@@ -627,7 +758,8 @@ namespace OHRRPGCEDX.Game
                     {
                         // For Direct2D, we don't need Direct3D device parameters
                         mapRenderer = new MapRenderer();
-                        // mapRenderer?.SetMap(currentMap); // Commented out until MapRenderer.SetMap is implemented
+                        mapRenderer.SetMap(currentMap, currentTileset);
+                        loggingSystem?.Info("Game Runtime", "MapRenderer initialized successfully");
                     }
                     catch (Exception ex)
                     {
@@ -681,19 +813,92 @@ namespace OHRRPGCEDX.Game
                 graphicsSystem?.Clear(Color.FromArgb(255, 26, 77, 26));
                 
                 // Render map
-                // mapRenderer?.Render(); // Commented out until MapRenderer.Render is implemented
+                if (mapRenderer != null && currentMap != null)
+                {
+                    mapRenderer.Render(graphicsSystem);
+                }
+                else
+                {
+                    // Fallback: render a simple grid pattern
+                    RenderFallbackMap();
+                }
                 
                 // Render player
-                player?.Render(graphicsSystem);
+                if (player != null)
+                {
+                    player.Render(graphicsSystem, currentTextures);
+                }
                 
                 // Render NPCs and other entities
                 RenderMapEntities();
+                
+                // Render UI overlay
+                RenderGameUI();
                 
                 // Console.WriteLine("Rendering game world...");
             }
             catch (Exception ex)
             {
                 loggingSystem?.Error("Game Runtime", $"Playing render error: {ex}");
+            }
+        }
+        
+        private void RenderFallbackMap()
+        {
+            try
+            {
+                if (graphicsSystem?.IsInitialized == true && currentMap != null)
+                {
+                    // Draw a simple grid pattern as fallback
+                    int tileSize = 32; // Default tile size
+                    Color gridColor = Color.FromArgb(255, 100, 150, 100);
+                    
+                    // Draw vertical lines
+                    for (int x = 0; x <= currentMap.Width; x++)
+                    {
+                        int screenX = x * tileSize;
+                        graphicsSystem.DrawLine(screenX, 0, screenX, currentMap.Height * tileSize, gridColor, 1);
+                    }
+                    
+                    // Draw horizontal lines
+                    for (int y = 0; y <= currentMap.Height; y++)
+                    {
+                        int screenY = y * tileSize;
+                        graphicsSystem.DrawLine(0, screenY, currentMap.Width * tileSize, screenY, gridColor, 1);
+                    }
+                    
+                    // Draw map info text
+                    string mapInfo = $"Map: {currentMap.Name} ({currentMap.Width}x{currentMap.Height})";
+                    graphicsSystem.DrawText(mapInfo, 10, 10, Color.White, TextAlignment.Left);
+                }
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Warning("Game Runtime", $"Fallback map rendering failed: {ex.Message}");
+            }
+        }
+        
+        private void RenderGameUI()
+        {
+            try
+            {
+                if (graphicsSystem?.IsInitialized == true)
+                {
+                    // Draw player position info
+                    if (player != null)
+                    {
+                        string posInfo = $"Player: ({player.Position.X}, {player.Position.Y})";
+                        graphicsSystem.DrawText(posInfo, 10, 30, Color.White, TextAlignment.Left);
+                    }
+                    
+                    // Draw game controls help
+                    string controls = "Arrow Keys: Move | ESC: Menu | F1: Help";
+                    graphicsSystem.DrawText(controls, 10, graphicsSystem.ScreenHeight - 30, Color.Gray, TextAlignment.Left);
+                }
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Warning("Game Runtime", $"Game UI rendering failed: {ex.Message}");
             }
         }
         
@@ -706,13 +911,226 @@ namespace OHRRPGCEDX.Game
         {
             try
             {
-                // TODO: Render NPCs, events, and other map entities
-                // For now, just log that we're rendering map entities
-                // Console.WriteLine("Rendering map entities...");
+                if (currentMap?.NPCs != null && graphicsSystem?.IsInitialized == true)
+                {
+                    // Render NPCs
+                    foreach (var npc in currentMap.NPCs)
+                    {
+                        if (npc.Active)
+                        {
+                            RenderNPC(graphicsSystem, npc);
+                        }
+                    }
+                }
+                
+                if (currentMap?.Doors != null && graphicsSystem?.IsInitialized == true)
+                {
+                    // Render doors
+                    foreach (var door in currentMap.Doors)
+                    {
+                        if (door.Active)
+                        {
+                            RenderDoor(door);
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
                 loggingSystem?.Warning("Game Runtime", $"Map entities rendering failed: {ex.Message}");
+            }
+        }
+        
+        private void RenderNPC(GraphicsSystem graphicsSystem, NPCData npc)
+        {
+            int tileSize = 32; // Default tile size
+            var screenX = npc.X * tileSize;
+            var screenY = npc.Y * tileSize;
+            
+            // Get NPC appearance data
+            var npcId = npc.Picture; // Use Picture as ID
+            var npcName = $"NPC{npcId}"; // Generate name from picture ID
+            var npcType = GetNPCTypeFromMovement(npc.MovementType); // Derive type from movement
+            
+            // Create a unique visual representation based on NPC data
+            var baseColor = GetNPCColor(npcId, npcType);
+            var accentColor = GetNPCAccentColor(npcId, npcType);
+            
+            // Draw NPC body (main rectangle)
+            graphicsSystem.FillRectangle(screenX + 4, screenY + 8, 24, 16, baseColor);
+            
+            // Draw NPC head
+            graphicsSystem.FillRectangle(screenX + 8, screenY + 2, 16, 16, accentColor);
+            
+            // Draw NPC type indicator
+            var typeColor = GetNPCTypeColor(npcType);
+            graphicsSystem.FillRectangle(screenX + 2, screenY + 2, 4, 4, typeColor);
+            
+            // Draw NPC details based on type
+            switch (npcType.ToLower())
+            {
+                case "merchant":
+                case "shop":
+                    // Draw shop symbol (coin)
+                    graphicsSystem.FillRectangle(screenX + 26, screenY + 6, 4, 4, Color.Yellow);
+                    graphicsSystem.DrawText("$", screenX + 26, screenY + 6, Color.Black);
+                    break;
+                    
+                case "enemy":
+                case "monster":
+                    // Draw monster symbol (claws)
+                    graphicsSystem.FillRectangle(screenX + 26, screenY + 4, 4, 8, Color.Red);
+                    break;
+                    
+                case "quest":
+                case "giver":
+                    // Draw quest symbol (exclamation mark)
+                    graphicsSystem.FillRectangle(screenX + 26, screenY + 6, 4, 4, Color.Orange);
+                    graphicsSystem.DrawText("!", screenX + 26, screenY + 6, Color.Black);
+                    break;
+                    
+                case "healer":
+                case "doctor":
+                    // Draw healer symbol (cross)
+                    graphicsSystem.FillRectangle(screenX + 26, screenY + 6, 4, 4, Color.Green);
+                    graphicsSystem.DrawText("+", screenX + 26, screenY + 6, Color.White);
+                    break;
+                    
+                default:
+                    // Draw generic NPC symbol (dot)
+                    graphicsSystem.FillRectangle(screenX + 26, screenY + 6, 4, 4, Color.Gray);
+                    break;
+            }
+            
+            // Draw NPC name
+            graphicsSystem.DrawText(npcName, screenX, screenY - 15, Color.White, TextAlignment.Center);
+            
+            // Draw NPC interaction indicator if they have a script
+            if (!string.IsNullOrEmpty(npc.Script))
+            {
+                var dialogueColor = Color.FromArgb(200, 255, 255, 0);
+                graphicsSystem.FillRectangle(screenX + 12, screenY + 28, 8, 4, dialogueColor);
+            }
+        }
+
+        private string GetNPCTypeFromMovement(int movementType)
+        {
+            switch (movementType)
+            {
+                case 0: return "stationary";
+                case 1: return "random";
+                case 2: return "follow";
+                case 3: return "patrol";
+                case 4: return "stationary";
+                default: return "unknown";
+            }
+        }
+
+        private void RenderNPCs(GraphicsSystem graphicsSystem)
+        {
+            if (currentMap?.NPCs == null) return;
+
+            foreach (var npc in currentMap.NPCs)
+            {
+                if (npc != null)
+                {
+                    RenderNPC(graphicsSystem, npc);
+                }
+            }
+        }
+
+        private Color GetNPCColor(int npcId, string npcType)
+        {
+            // Generate consistent colors for each NPC type
+            switch (npcType?.ToLower())
+            {
+                case "merchant":
+                case "shop":
+                    return Color.FromArgb(255, 255, 215, 0); // Gold
+                case "enemy":
+                case "monster":
+                    return Color.FromArgb(255, 139, 0, 0); // Dark red
+                case "quest":
+                case "giver":
+                    return Color.FromArgb(255, 255, 140, 0); // Dark orange
+                case "healer":
+                case "doctor":
+                    return Color.FromArgb(255, 34, 139, 34); // Forest green
+                case "guard":
+                case "soldier":
+                    return Color.FromArgb(255, 105, 105, 105); // Dim gray
+                default:
+                    // Generate color based on NPC ID for variety
+                    var colors = new[]
+                    {
+                        Color.FromArgb(255, 150, 150, 150), // Light gray
+                        Color.FromArgb(255, 180, 150, 120), // Tan
+                        Color.FromArgb(255, 120, 180, 150), // Light green
+                        Color.FromArgb(255, 150, 120, 180), // Light purple
+                        Color.FromArgb(255, 180, 120, 150), // Light pink
+                    };
+                    return colors[npcId % colors.Length];
+            }
+        }
+
+        private Color GetNPCAccentColor(int npcId, string npcType)
+        {
+            var baseColor = GetNPCColor(npcId, npcType);
+            return Color.FromArgb(255,
+                Math.Min(255, baseColor.R + 30),
+                Math.Min(255, baseColor.G + 30),
+                Math.Min(255, baseColor.B + 30));
+        }
+
+        private Color GetNPCTypeColor(string npcType)
+        {
+            switch (npcType?.ToLower())
+            {
+                case "merchant":
+                case "shop":
+                    return Color.Yellow;
+                case "enemy":
+                case "monster":
+                    return Color.Red;
+                case "quest":
+                case "giver":
+                    return Color.Orange;
+                case "healer":
+                case "doctor":
+                    return Color.Green;
+                case "guard":
+                case "soldier":
+                    return Color.Blue;
+                default:
+                    return Color.Gray;
+            }
+        }
+        
+        private void RenderDoor(DoorData door)
+        {
+            try
+            {
+                if (graphicsSystem?.IsInitialized == true)
+                {
+                    int tileSize = 32; // Default tile size
+                    int screenX = door.X * tileSize;
+                    int screenY = door.Y * tileSize;
+                    
+                    // Draw door (placeholder rectangle for now)
+                    Color doorColor = Color.FromArgb(255, 139, 69, 19); // Brown for doors
+                    graphicsSystem.FillRectangle(screenX, screenY, tileSize, tileSize, doorColor);
+                    
+                    // Draw door border
+                    graphicsSystem.DrawRectangle(screenX, screenY, tileSize, tileSize, Color.White, 2);
+                    
+                    // Draw door info
+                    string doorInfo = $"Door to Map {door.DestinationMap}";
+                    graphicsSystem.DrawText(doorInfo, screenX, screenY - 15, Color.White, TextAlignment.Center);
+                }
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Warning("Game Runtime", $"Door rendering failed: {ex.Message}");
             }
         }
         
@@ -1164,58 +1582,255 @@ namespace OHRRPGCEDX.Game
     {
         public Point Position { get; set; }
         public HeroData HeroData { get; private set; }
+        public Direction Direction { get; set; }
+        public bool IsMoving { get; private set; }
+        public Point TargetPosition { get; private set; }
+        public float MoveSpeed { get; set; } = 4.0f; // Tiles per second
         
         public void Initialize(HeroData heroData)
         {
             HeroData = heroData;
             Position = Point.Empty;
+            Direction = Direction.South;
+            IsMoving = false;
+            TargetPosition = Position;
         }
         
         public void Update(double deltaTime, InputSystem inputSystem)
         {
-            // TODO: Implement player movement and input handling
+            // Handle movement input
+            if (!IsMoving)
+            {
+                Point newPosition = Position;
+                bool moved = false;
+                
+                if (inputSystem?.IsKeyPressed(Keys.Up) == true)
+                {
+                    newPosition.Y--;
+                    Direction = Direction.North;
+                    moved = true;
+                }
+                else if (inputSystem?.IsKeyPressed(Keys.Down) == true)
+                {
+                    newPosition.Y++;
+                    Direction = Direction.South;
+                    moved = true;
+                }
+                else if (inputSystem?.IsKeyPressed(Keys.Left) == true)
+                {
+                    newPosition.X--;
+                    Direction = Direction.West;
+                    moved = true;
+                }
+                else if (inputSystem?.IsKeyPressed(Keys.Right) == true)
+                {
+                    newPosition.X++;
+                    Direction = Direction.East;
+                    moved = true;
+                }
+                
+                if (moved)
+                {
+                    // Check if new position is valid (within map bounds and passable)
+                    if (IsValidPosition(newPosition))
+                    {
+                        TargetPosition = newPosition;
+                        IsMoving = true;
+                    }
+                }
+            }
+            
+            // Update movement animation
+            if (IsMoving)
+            {
+                // Simple movement: instantly move to target
+                Position = TargetPosition;
+                IsMoving = false;
+            }
         }
         
-        public void Render(GraphicsSystem graphicsSystem)
+        private bool IsValidPosition(Point position)
+        {
+            // TODO: Implement proper collision detection with map passability
+            // For now, just check map bounds
+            return position.X >= 0 && position.Y >= 0;
+        }
+        
+        public void Render(GraphicsSystem graphicsSystem, TextureData[] textures)
+        {
+            if (HeroData != null)
+            {
+                // Render character using actual hero data
+                RenderHeroSprite(graphicsSystem, textures);
+            }
+            else
+            {
+                // Fallback to basic player representation
+                RenderBasicPlayer(graphicsSystem);
+            }
+        }
+
+        private void RenderHeroSprite(GraphicsSystem graphicsSystem, TextureData[] textures)
+        {
+            var centerX = Position.X - 16; // Center the sprite
+            var centerY = Position.Y - 16;
+            
+            // Get hero appearance data
+            var heroId = HeroData.ID;
+            var heroName = HeroData.Name ?? "Hero";
+            var heroLevel = HeroData.Level;
+            
+            // Create a unique visual representation based on hero data
+            var baseColor = GetHeroColor(heroId);
+            var accentColor = GetHeroAccentColor(heroId);
+            
+            // Draw hero body (main rectangle)
+            graphicsSystem.FillRectangle(centerX + 4, centerY + 8, 24, 16, baseColor);
+            
+            // Draw hero head
+            graphicsSystem.FillRectangle(centerX + 8, centerY + 2, 16, 16, accentColor);
+            
+            // Draw hero details based on direction
+            switch (Direction)
+            {
+                case Direction.North:
+                    // Draw eyes looking up
+                    graphicsSystem.FillRectangle(centerX + 10, centerY + 4, 3, 3, Color.White);
+                    graphicsSystem.FillRectangle(centerX + 19, centerY + 4, 3, 3, Color.White);
+                    graphicsSystem.FillRectangle(centerX + 11, centerY + 5, 1, 1, Color.Black);
+                    graphicsSystem.FillRectangle(centerX + 20, centerY + 5, 1, 1, Color.Black);
+                    break;
+                    
+                case Direction.South:
+                    // Draw eyes looking down
+                    graphicsSystem.FillRectangle(centerX + 10, centerY + 11, 3, 3, Color.White);
+                    graphicsSystem.FillRectangle(centerX + 19, centerY + 11, 3, 3, Color.White);
+                    graphicsSystem.FillRectangle(centerX + 11, centerY + 12, 1, 1, Color.Black);
+                    graphicsSystem.FillRectangle(centerX + 20, centerY + 12, 1, 1, Color.Black);
+                    break;
+                    
+                case Direction.East:
+                    // Draw eyes looking right
+                    graphicsSystem.FillRectangle(centerX + 18, centerY + 6, 3, 3, Color.White);
+                    graphicsSystem.FillRectangle(centerX + 18, centerY + 13, 3, 3, Color.White);
+                    graphicsSystem.FillRectangle(centerX + 19, centerY + 7, 1, 1, Color.Black);
+                    graphicsSystem.FillRectangle(centerX + 19, centerY + 14, 1, 1, Color.Black);
+                    break;
+                    
+                case Direction.West:
+                    // Draw eyes looking left
+                    graphicsSystem.FillRectangle(centerX + 11, centerY + 6, 3, 3, Color.White);
+                    graphicsSystem.FillRectangle(centerX + 11, centerY + 13, 3, 3, Color.White);
+                    graphicsSystem.FillRectangle(centerX + 12, centerY + 7, 1, 1, Color.Black);
+                    graphicsSystem.FillRectangle(centerX + 12, centerY + 14, 1, 1, Color.Black);
+                    break;
+            }
+            
+            // Draw hero stats indicator (using base stats)
+            if (HeroData.BaseStats != null)
+            {
+                var healthPercent = HeroData.BaseStats.HP / 100.0f; // Normalize to 0-1
+                var healthBarWidth = 24;
+                var healthBarHeight = 3;
+                var healthBarX = centerX + 4;
+                var healthBarY = centerY + 26;
+                
+                // Health bar background
+                graphicsSystem.FillRectangle(healthBarX, healthBarY, healthBarWidth, healthBarHeight, Color.DarkRed);
+                // Health bar fill
+                var healthFillWidth = (int)(healthBarWidth * healthPercent);
+                if (healthFillWidth > 0)
+                {
+                    var healthColor = healthPercent > 0.5f ? Color.Green : healthPercent > 0.25f ? Color.Yellow : Color.Red;
+                    graphicsSystem.FillRectangle(healthBarX, healthBarY, healthFillWidth, healthBarHeight, healthColor);
+                }
+            }
+            
+            // Draw hero name and level
+            var infoY = centerY + 32;
+            graphicsSystem.DrawText(heroName, centerX, infoY, Color.White);
+            graphicsSystem.DrawText($"Lv.{heroLevel}", centerX + 24, infoY, Color.Yellow);
+        }
+
+        private void RenderBasicPlayer(GraphicsSystem graphicsSystem)
+        {
+            var centerX = Position.X - 16;
+            var centerY = Position.Y - 16;
+            
+            // Basic blue player representation
+            graphicsSystem.FillRectangle(centerX + 4, centerY + 8, 24, 16, Color.Blue);
+            graphicsSystem.FillRectangle(centerX + 8, centerY + 2, 16, 16, Color.LightBlue);
+            
+            // Simple face
+            graphicsSystem.FillRectangle(centerX + 10, centerY + 6, 3, 3, Color.White);
+            graphicsSystem.FillRectangle(centerX + 19, centerY + 6, 3, 3, Color.White);
+            graphicsSystem.FillRectangle(centerX + 11, centerY + 7, 1, 1, Color.Black);
+            graphicsSystem.FillRectangle(centerX + 20, centerY + 7, 1, 1, Color.Black);
+            
+            // Direction indicator
+            DrawDirectionIndicator(graphicsSystem, centerX + 16, centerY + 16, 8);
+        }
+
+        private void DrawDirectionIndicator(GraphicsSystem graphicsSystem, int centerX, int centerY, int size)
         {
             try
             {
-                // TODO: Implement proper player sprite rendering
-                // For now, just log that we're rendering the player
-                // Console.WriteLine($"Rendering player at position: {Position}");
+                Color indicatorColor = Color.White;
+                int indicatorSize = size;
+                
+                switch (Direction)
+                {
+                    case Direction.North:
+                        // Triangle pointing up - use small rectangle for now
+                        graphicsSystem.FillRectangle(centerX - indicatorSize/2, centerY - indicatorSize/2, indicatorSize, indicatorSize, indicatorColor);
+                        break;
+                    case Direction.South:
+                        // Triangle pointing down - use small rectangle for now
+                        graphicsSystem.FillRectangle(centerX - indicatorSize/2, centerY - indicatorSize/2, indicatorSize, indicatorSize, indicatorColor);
+                        break;
+                    case Direction.West:
+                        // Triangle pointing left - use small rectangle for now
+                        graphicsSystem.FillRectangle(centerX - indicatorSize/2, centerY - indicatorSize/2, indicatorSize, indicatorSize, indicatorColor);
+                        break;
+                    case Direction.East:
+                        // Triangle pointing right - use small rectangle for now
+                        graphicsSystem.FillRectangle(centerX - indicatorSize/2, centerY - indicatorSize/2, indicatorSize, indicatorSize, indicatorColor);
+                        break;
+                }
             }
             catch (Exception ex)
             {
-                // Console.WriteLine($"Warning: Player rendering failed: {ex.Message}");
+                // Silently fail for direction indicator
             }
         }
-    }
-    
-    /// <summary>
-    /// Map class for the game
-    /// </summary>
-    public class Map
-    {
-        public string Name { get; set; }
-        public int Width { get; set; }
-        public int Height { get; set; }
-        public TileData[,] Tiles { get; set; }
-        
-        public void Update(double deltaTime)
+
+        private Color GetHeroColor(int heroId)
         {
-            // TODO: Implement map updates (events, NPCs, etc.)
+            // Generate consistent colors for each hero
+            var colors = new[]
+            {
+                Color.FromArgb(255, 100, 150, 200), // Blue
+                Color.FromArgb(255, 200, 100, 100), // Red
+                Color.FromArgb(255, 100, 200, 100), // Green
+                Color.FromArgb(255, 200, 200, 100), // Yellow
+                Color.FromArgb(255, 200, 100, 200), // Purple
+                Color.FromArgb(255, 100, 200, 200), // Cyan
+                Color.FromArgb(255, 200, 150, 100), // Orange
+                Color.FromArgb(255, 150, 100, 200)  // Magenta
+            };
+            
+            return colors[heroId % colors.Length];
+        }
+
+        private Color GetHeroAccentColor(int heroId)
+        {
+            var baseColor = GetHeroColor(heroId);
+            return Color.FromArgb(255,
+                Math.Min(255, baseColor.R + 40),
+                Math.Min(255, baseColor.G + 40),
+                Math.Min(255, baseColor.B + 40));
         }
     }
-    
-    /// <summary>
-    /// Tile data structure
-    /// </summary>
-    public class TileData
-    {
-        public int TileID { get; set; }
-        public bool IsWalkable { get; set; }
-        public bool IsWater { get; set; }
-        public int EventID { get; set; }
-    }
 }
+
 
