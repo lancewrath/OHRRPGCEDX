@@ -100,13 +100,18 @@ namespace OHRRPGCEDX
                 }
                 
                 // Initialize graphics system
+                loggingSystem.Info("Custom", "Creating graphics system...");
                 graphicsSystem = new GraphicsSystem();
+                loggingSystem.Info("Custom", "Graphics system created, initializing...");
+                
                 if (!graphicsSystem.Initialize(800, 600, false, true, this.Handle))
                 {
                     loggingSystem.Error("Custom", "Failed to initialize graphics system");
                     MessageBox.Show("Failed to initialize graphics system", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
+                
+                loggingSystem.Info("Custom", "Graphics system initialized successfully");
                 
                 // Initialize input system
                 inputSystem = new InputSystem();
@@ -169,10 +174,16 @@ namespace OHRRPGCEDX
 
         private void RenderMainMenu()
         {
-            if (graphicsSystem == null || !graphicsSystem.IsInitialized) return;
+            if (graphicsSystem == null || !graphicsSystem.IsInitialized) 
+            {
+                loggingSystem?.Warning("Custom", "Graphics system not available for rendering");
+                return;
+            }
 
             try
             {
+                loggingSystem?.Debug("Custom", "Starting to render main menu...");
+                
                 // Clear the screen
                 graphicsSystem.BeginScene();
                 graphicsSystem.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.1f, 0.1f, 0.1f, 1.0f));
@@ -184,6 +195,20 @@ namespace OHRRPGCEDX
                 // Draw title text
                 graphicsSystem.DrawText(title, 400, 50, System.Drawing.Color.White, Graphics.TextAlignment.Center);
                 graphicsSystem.DrawText(subtitle, 400, 80, System.Drawing.Color.Gray, Graphics.TextAlignment.Center);
+
+                // Draw some test rectangles to verify rendering is working
+                graphicsSystem.FillRectangle(50, 150, 100, 50, System.Drawing.Color.Blue);
+                graphicsSystem.DrawRectangle(50, 150, 100, 50, System.Drawing.Color.White, 2.0f);
+                
+                graphicsSystem.FillRectangle(200, 150, 100, 50, System.Drawing.Color.Red);
+                graphicsSystem.DrawRectangle(200, 150, 100, 50, System.Drawing.Color.White, 2.0f);
+                
+                graphicsSystem.FillRectangle(350, 150, 100, 50, System.Drawing.Color.Green);
+                graphicsSystem.DrawRectangle(350, 150, 100, 50, System.Drawing.Color.White, 2.0f);
+                
+                // Draw some test lines
+                graphicsSystem.DrawLine(50, 250, 450, 250, System.Drawing.Color.Yellow, 3.0f);
+                graphicsSystem.DrawLine(50, 280, 450, 280, System.Drawing.Color.Orange, 2.0f);
 
                 // Render the menu using MenuSystem
                 if (menuSystem != null)
@@ -200,10 +225,13 @@ namespace OHRRPGCEDX
 
                 graphicsSystem.EndScene();
                 graphicsSystem.Present();
+                
+                loggingSystem?.Debug("Custom", "Main menu rendering completed successfully");
             }
             catch (Exception ex)
             {
                 loggingSystem?.Error("Custom", $"Error rendering main menu: {ex.Message}");
+                loggingSystem?.Error("Custom", $"Stack trace: {ex.StackTrace}");
             }
         }
 

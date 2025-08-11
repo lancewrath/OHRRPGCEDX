@@ -284,12 +284,8 @@ namespace OHRRPGCEDX.UI
                 if (options.edged)
                 {
                     // Draw border around menu
-                    var borderColor = new SharpDX.Color4(0.2f, 0.2f, 0.2f, 1.0f);
-                    var backgroundColor = new SharpDX.Color4(0.1f, 0.1f, 0.1f, 0.8f);
-                    
-                    // Background
-                    graphicsSystem.DrawText("", menuX - 5, menuY - 5, System.Drawing.Color.FromArgb(0, 0, 0, 0));
-                    // This will be replaced with actual rectangle drawing when implemented
+                    graphicsSystem.FillRectangle(menuX - 5, menuY - 5, menu_width + 10, menu_height * 20 + 10, System.Drawing.Color.FromArgb(20, 20, 20, 200));
+                    graphicsSystem.DrawRectangle(menuX - 5, menuY - 5, menu_width + 10, menu_height * 20 + 10, System.Drawing.Color.FromArgb(50, 50, 50, 255), 2.0f);
                 }
 
                 // Draw menu items
