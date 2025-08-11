@@ -1080,13 +1080,6 @@ namespace OHRRPGCEDX.Game
             // Log the final path being used
             loggingSystem?.Info("Game Runtime", $"File browser initializing with path: {defaultPath}");
             
-            // Show debug information to user
-            string debugInfo = $"StartupPath: {Application.StartupPath}\n" +
-                             $"CurrentDirectory: {Environment.CurrentDirectory}\n" +
-                             $"Selected Path: {defaultPath}\n" +
-                             $"Path Exists: {Directory.Exists(defaultPath)}";
-            MessageBox.Show(debugInfo, "File Browser Debug Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            
             fileBrowser.Initialize(FileBrowser.BrowseFileType.RPG, defaultPath);
             
             loggingSystem?.Info("Game Runtime", "File browser started");
