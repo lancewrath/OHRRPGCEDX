@@ -25,6 +25,13 @@ namespace OHRRPGCEDX
         private const string MUSIC_BACKEND = "sdl2";
         
         // Main editor menu options (matching old engine's main_editor_menu)
+        private List<string> startupMenuOptions = new List<string>
+        {
+            "CREATE NEW GAME",
+            "LOAD EXISTING GAME", 
+            "EXIT PROGRAM"
+        };
+        
         private List<string> mainMenuOptions = new List<string>
         {
             "Edit Graphics",
@@ -51,8 +58,10 @@ namespace OHRRPGCEDX
         };
         
         private int selectedMenuIndex = 0;
+        private int selectedStartupMenuIndex = 1; // Default to "LOAD EXISTING GAME" (index 1)
         private bool isRunning = true;
         private bool showHelpText = false;
+        private bool showingStartupMenu = true; // Start with startup menu
 
         public Custom()
         {
@@ -188,39 +197,13 @@ namespace OHRRPGCEDX
                 graphicsSystem.BeginScene();
                 graphicsSystem.Clear(new SharpDX.Mathematics.Interop.RawColor4(0.1f, 0.1f, 0.1f, 1.0f));
 
-                // Draw title
-                string title = $"{SHORT_VERSION} v{VERSION_REVISION} ({VERSION_CODENAME})";
-                string subtitle = $"Built {VERSION_DATE} - {GFX_BACKEND} graphics, {MUSIC_BACKEND} music";
-                
-                // Draw title text
-                graphicsSystem.DrawText(title, 400, 50, System.Drawing.Color.White, Graphics.TextAlignment.Center);
-                graphicsSystem.DrawText(subtitle, 400, 80, System.Drawing.Color.Gray, Graphics.TextAlignment.Center);
-
-                // Draw some test rectangles to verify rendering is working
-                graphicsSystem.FillRectangle(50, 150, 100, 50, System.Drawing.Color.Blue);
-                graphicsSystem.DrawRectangle(50, 150, 100, 50, System.Drawing.Color.White, 2.0f);
-                
-                graphicsSystem.FillRectangle(200, 150, 100, 50, System.Drawing.Color.Red);
-                graphicsSystem.DrawRectangle(200, 150, 100, 50, System.Drawing.Color.White, 2.0f);
-                
-                graphicsSystem.FillRectangle(350, 150, 100, 50, System.Drawing.Color.Green);
-                graphicsSystem.DrawRectangle(350, 150, 100, 50, System.Drawing.Color.White, 2.0f);
-                
-                // Draw some test lines
-                graphicsSystem.DrawLine(50, 250, 450, 250, System.Drawing.Color.Yellow, 3.0f);
-                graphicsSystem.DrawLine(50, 280, 450, 280, System.Drawing.Color.Orange, 2.0f);
-
-                // Render the menu using MenuSystem
-                if (menuSystem != null)
+                if (showingStartupMenu)
                 {
-                    menuSystem.Render(graphicsSystem);
+                    RenderStartupMenu();
                 }
-
-                // Draw help text if requested
-                if (showHelpText)
+                else
                 {
-                    string helpText = "Use arrow keys to navigate, Enter to select, F1 for help";
-                    graphicsSystem.DrawText(helpText, 400, 550, System.Drawing.Color.Gray, Graphics.TextAlignment.Center);
+                    RenderEditorMenu();
                 }
 
                 graphicsSystem.EndScene();
@@ -235,51 +218,190 @@ namespace OHRRPGCEDX
             }
         }
 
+        private void RenderStartupMenu()
+        {
+            // Draw title "O.H.R.RPG.C.E" at the top center
+            string title = "O.H.R.RPG.C.E";
+            graphicsSystem.DrawText(title, 400, 80, System.Drawing.Color.DarkBlue, Graphics.TextAlignment.Center);
+            
+            // Draw menu options
+            for (int i = 0; i < startupMenuOptions.Count; i++)
+            {
+                var option = startupMenuOptions[i];
+                var color = (i == selectedStartupMenuIndex) ? System.Drawing.Color.Yellow : System.Drawing.Color.LightGray;
+                var yPos = 200 + (i * 40);
+                
+                graphicsSystem.DrawText(option, 400, yPos, color, Graphics.TextAlignment.Center);
+            }
+            
+            // Draw footer text
+            string versionInfo = "OHRRPGCE kaleidophone+1 20250810 sdl2/sd12";
+            string helpText = "Press F1 for help on any menu!";
+            
+            graphicsSystem.DrawText(versionInfo, 400, 500, System.Drawing.Color.LightGray, Graphics.TextAlignment.Center);
+            graphicsSystem.DrawText(helpText, 400, 530, System.Drawing.Color.LightGray, Graphics.TextAlignment.Center);
+        }
+
+        private void RenderEditorMenu()
+        {
+            // Draw title
+            string title = $"{SHORT_VERSION} v{VERSION_REVISION} ({VERSION_CODENAME})";
+            string subtitle = $"Built {VERSION_DATE} - {GFX_BACKEND} graphics, {MUSIC_BACKEND} music";
+            
+            // Draw title text
+            graphicsSystem.DrawText(title, 400, 50, System.Drawing.Color.White, Graphics.TextAlignment.Center);
+            graphicsSystem.DrawText(subtitle, 400, 80, System.Drawing.Color.Gray, Graphics.TextAlignment.Center);
+
+            // Draw some test rectangles to verify rendering is working
+            graphicsSystem.FillRectangle(50, 150, 100, 50, System.Drawing.Color.Blue);
+            graphicsSystem.DrawRectangle(50, 150, 100, 50, System.Drawing.Color.White, 2.0f);
+            
+            graphicsSystem.FillRectangle(200, 150, 100, 50, System.Drawing.Color.Red);
+            graphicsSystem.DrawRectangle(200, 150, 100, 50, System.Drawing.Color.White, 2.0f);
+            
+            graphicsSystem.FillRectangle(350, 150, 100, 50, System.Drawing.Color.Green);
+            graphicsSystem.DrawRectangle(350, 150, 100, 50, System.Drawing.Color.White, 2.0f);
+            
+            // Draw some test lines
+            graphicsSystem.DrawLine(50, 250, 450, 250, System.Drawing.Color.Yellow, 3.0f);
+            graphicsSystem.DrawLine(50, 280, 450, 280, System.Drawing.Color.Orange, 2.0f);
+
+            // Render the menu using MenuSystem
+            if (menuSystem != null)
+            {
+                menuSystem.Render(graphicsSystem);
+            }
+
+            // Draw help text if requested
+            if (showHelpText)
+            {
+                string helpText = "Use arrow keys to navigate, Enter to select, F1 for help";
+                graphicsSystem.DrawText(helpText, 400, 550, System.Drawing.Color.Gray, Graphics.TextAlignment.Center);
+            }
+        }
+
         private void ProcessInput()
         {
-            if (inputSystem == null || menuSystem == null) return;
+            if (inputSystem == null) return;
 
             try
             {
-                // Handle input for menu navigation
-                if (inputSystem.IsKeyPressed(Keys.Up))
+                if (showingStartupMenu)
                 {
-                    menuSystem.MoveUp();
+                    ProcessStartupMenuInput();
                 }
-                else if (inputSystem.IsKeyPressed(Keys.Down))
+                else
                 {
-                    menuSystem.MoveDown();
+                    ProcessEditorMenuInput();
                 }
-                else if (inputSystem.IsKeyPressed(Keys.Left))
-                {
-                    menuSystem.MoveLeft();
-                }
-                else if (inputSystem.IsKeyPressed(Keys.Right))
-                {
-                    menuSystem.MoveRight();
-                }
-                else if (inputSystem.IsKeyPressed(Keys.Enter))
-                {
-                    // Execute the selected menu item
-                    ExecuteMenuSelection();
-                }
-                else if (inputSystem.IsKeyPressed(Keys.Escape))
-                {
-                    // Exit the application
-                    isRunning = false;
-                }
-                else if (inputSystem.IsKeyPressed(Keys.F1))
-                {
-                    // Toggle help text
-                    showHelpText = !showHelpText;
-                }
-
-                // Update the selected menu index to match MenuSystem
-                selectedMenuIndex = menuSystem.GetSelectedIndex();
             }
             catch (Exception ex)
             {
                 loggingSystem?.Error("Custom", $"Error processing input: {ex.Message}");
+            }
+        }
+
+        private void ProcessStartupMenuInput()
+        {
+            if (inputSystem.IsKeyPressed(Keys.Up))
+            {
+                selectedStartupMenuIndex = Math.Max(0, selectedStartupMenuIndex - 1);
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Down))
+            {
+                selectedStartupMenuIndex = Math.Min(startupMenuOptions.Count - 1, selectedStartupMenuIndex + 1);
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Enter))
+            {
+                ExecuteStartupMenuSelection();
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Escape))
+            {
+                // Exit the application
+                isRunning = false;
+            }
+            else if (inputSystem.IsKeyPressed(Keys.F1))
+            {
+                // Toggle help text
+                showHelpText = !showHelpText;
+            }
+        }
+
+        private void ProcessEditorMenuInput()
+        {
+            if (menuSystem == null) return;
+
+            // Handle input for menu navigation
+            if (inputSystem.IsKeyPressed(Keys.Up))
+            {
+                menuSystem.MoveUp();
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Down))
+            {
+                menuSystem.MoveDown();
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Left))
+            {
+                menuSystem.MoveLeft();
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Right))
+            {
+                menuSystem.MoveRight();
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Enter))
+            {
+                // Execute the selected menu item
+                ExecuteMenuSelection();
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Escape))
+            {
+                // Go back to startup menu
+                showingStartupMenu = true;
+                loggingSystem?.Info("Custom", "Returning to startup menu");
+            }
+            else if (inputSystem.IsKeyPressed(Keys.F1))
+            {
+                // Toggle help text
+                showHelpText = !showHelpText;
+            }
+
+            // Update the selected menu index to match MenuSystem
+            selectedMenuIndex = menuSystem.GetSelectedIndex();
+        }
+
+        private void ExecuteStartupMenuSelection()
+        {
+            try
+            {
+                string selectedOption = startupMenuOptions[selectedStartupMenuIndex];
+                loggingSystem?.Info("Custom", $"Selected startup menu option: {selectedOption} (index: {selectedStartupMenuIndex})");
+
+                switch (selectedStartupMenuIndex)
+                {
+                    case 0: // CREATE NEW GAME
+                        // For now, just switch to editor menu
+                        // In a real implementation, this would create a new game file
+                        showingStartupMenu = false;
+                        loggingSystem?.Info("Custom", "Switching to editor menu for new game");
+                        break;
+                    case 1: // LOAD EXISTING GAME
+                        // For now, just switch to editor menu
+                        // In a real implementation, this would load an existing game file
+                        showingStartupMenu = false;
+                        loggingSystem?.Info("Custom", "Switching to editor menu for existing game");
+                        break;
+                    case 2: // EXIT PROGRAM
+                        isRunning = false;
+                        loggingSystem?.Info("Custom", "Exiting application");
+                        break;
+                    default:
+                        loggingSystem?.Warning("Custom", $"Unknown startup menu option: {selectedOption}");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                loggingSystem?.Error("Custom", $"Error executing startup menu selection: {ex.Message}");
             }
         }
 
