@@ -18,6 +18,8 @@ namespace OHRRPGCEDX
         private LoggingSystem loggingSystem;
         private FileBrowser fileBrowser;
         private FileBrowserRenderer fileBrowserRenderer;
+        private GameData.RPGFileLoader rpgFileLoader;
+        private RPGData loadedRPGData;
         
         // Version information (similar to old engine)
         private const string SHORT_VERSION = "OHRRPGCE Custom Editor";
@@ -150,6 +152,9 @@ namespace OHRRPGCEDX
                 // Initialize file browser system
                 fileBrowser = new FileBrowser();
                 fileBrowserRenderer = new FileBrowserRenderer(fileBrowser, graphicsSystem);
+
+                // Initialize RPG file loader
+                rpgFileLoader = new GameData.RPGFileLoader();
 
                 loggingSystem?.Info("Custom", "All systems initialized successfully");
             }
@@ -352,7 +357,7 @@ namespace OHRRPGCEDX
             {
                 selectedStartupMenuIndex = Math.Min(startupMenuOptions.Count - 1, selectedStartupMenuIndex + 1);
             }
-            else if (inputSystem.IsKeyPressed(Keys.Enter))
+            else if (inputSystem.IsKeyJustPressed(Keys.Enter))
             {
                 ExecuteStartupMenuSelection();
             }
@@ -389,7 +394,7 @@ namespace OHRRPGCEDX
             {
                 menuSystem.MoveRight();
             }
-            else if (inputSystem.IsKeyPressed(Keys.Enter))
+            else if (inputSystem.IsKeyJustPressed(Keys.Enter))
             {
                 // Execute the selected menu item
                 ExecuteMenuSelection();
@@ -425,7 +430,7 @@ namespace OHRRPGCEDX
             {
                 fileBrowser.MoveDown();
             }
-            else if (inputSystem.IsKeyPressed(Keys.Enter))
+            else if (inputSystem.IsKeyJustPressed(Keys.Enter))
             {
                 // Navigate to selected entry or select file
                 if (fileBrowser.NavigateToSelected())
@@ -435,9 +440,48 @@ namespace OHRRPGCEDX
                     if (!string.IsNullOrEmpty(selectedPath))
                     {
                         loggingSystem?.Info("Custom", $"Selected RPG file: {selectedPath}");
-                        // TODO: Load the RPG file here
-                        MessageBox.Show($"Selected RPG file: {selectedPath}\n\nFile loading functionality will be implemented next.", 
-                            "File Selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        
+                        // Load the RPG file
+                        if (rpgFileLoader != null)
+                        {
+                            try
+                            {
+                                loggingSystem?.Info("Custom", "Loading RPG file...");
+                                
+                                if (rpgFileLoader.LoadRPG(selectedPath))
+                                {
+                                    // Load the game data
+                                    loadedRPGData = rpgFileLoader.LoadGameData(selectedPath);
+                                    
+                                    if (loadedRPGData != null)
+                                    {
+                                        loggingSystem?.Info("Custom", $"Successfully loaded RPG: {loadedRPGData.General?.GameTitle ?? "Unknown Title"}");
+                                        loggingSystem?.Info("Custom", $"Heroes: {loadedRPGData.Heroes?.Length ?? 0}, Maps: {loadedRPGData.Maps?.Length ?? 0}");
+                                        
+                                        MessageBox.Show($"Successfully loaded RPG file!\n\nTitle: {loadedRPGData.General?.GameTitle ?? "Unknown"}\nAuthor: {loadedRPGData.General?.Author ?? "Unknown"}\nHeroes: {loadedRPGData.Heroes?.Length ?? 0}\nMaps: {loadedRPGData.Maps?.Length ?? 0}\n\nFile contains {rpgFileLoader.LumpCount} data lumps.", 
+                                            "RPG Loaded Successfully", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                    }
+                                    else
+                                    {
+                                        loggingSystem?.Error("Custom", "Failed to load game data from RPG file");
+                                        MessageBox.Show("Failed to load game data from RPG file. The file may be corrupted or in an unsupported format.", 
+                                            "Load Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                    }
+                                }
+                                else
+                                {
+                                    loggingSystem?.Error("Custom", "Failed to load RPG file");
+                                    MessageBox.Show("Failed to load RPG file. The file may be corrupted or in an unsupported format.", 
+                                        "Load Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                loggingSystem?.Error("Custom", $"Error loading RPG file: {ex.Message}");
+                                MessageBox.Show($"Error loading RPG file: {ex.Message}", 
+                                    "Load Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                        }
                         
                         // Go to editor menu
                         showingFileBrowser = false;

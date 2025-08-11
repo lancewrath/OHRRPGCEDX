@@ -130,68 +130,148 @@ namespace OHRRPGCEDX.GameData
                 using (var stream = File.OpenRead(filePath))
                 using (var reader = new BinaryReader(stream))
                 {
-                    // Read RPG header
+                    // Try to detect file format
                     var magic = reader.ReadBytes(4);
-                    if (Encoding.ASCII.GetString(magic) != "RPG!")
+                    stream.Position = 0; // Reset position
+
+                    if (Encoding.ASCII.GetString(magic) == "RPG!")
                     {
-                        Console.WriteLine("Invalid RPG file format");
-                        return false;
+                        // Modern RPG format
+                        return LoadModernRPGFormat(reader);
                     }
+                    else
+                    {
+                        // Old engine lumped format
+                        return LoadOldLumpedFormat(reader);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to load from file: {ex.Message}");
+                return false;
+            }
+        }
 
-                    var version = reader.ReadInt32();
-                    var lumpCount = reader.ReadInt32();
-                    var headerSize = reader.ReadInt32();
+        /// <summary>
+        /// Load modern RPG format with "RPG!" header
+        /// </summary>
+        private bool LoadModernRPGFormat(BinaryReader reader)
+        {
+            try
+            {
+                // Read RPG header
+                var magic = reader.ReadBytes(4);
+                var version = reader.ReadInt32();
+                var lumpCount = reader.ReadInt32();
+                var headerSize = reader.ReadInt32();
 
-                    Console.WriteLine($"RPG Version: {version}, Lumps: {lumpCount}");
+                Console.WriteLine($"Modern RPG Version: {version}, Lumps: {lumpCount}");
 
-                    // Read lump directory
+                // Read lump directory
+                for (int i = 0; i < lumpCount; i++)
+                {
+                    var lumpName = ReadFixedString(reader, 32);
+                    var lumpOffset = reader.ReadInt32();
+                    var lumpSize = reader.ReadInt32();
+                    var lumpFlags = reader.ReadInt32();
+
+                    // Store lump info for later loading
+                    lumps[lumpName] = new byte[lumpSize];
+                }
+
+                // Read lump data
+                foreach (var lump in lumps)
+                {
+                    var lumpName = lump.Key;
+                    var lumpData = lump.Value;
+                    
+                    // Find lump info in directory
+                    var stream = reader.BaseStream;
+                    stream.Position = headerSize;
                     for (int i = 0; i < lumpCount; i++)
                     {
-                        var lumpName = ReadFixedString(reader, 32);
-                        var lumpOffset = reader.ReadInt32();
-                        var lumpSize = reader.ReadInt32();
-                        var lumpFlags = reader.ReadInt32();
+                        var name = ReadFixedString(reader, 32);
+                        var offset = reader.ReadInt32();
+                        var size = reader.ReadInt32();
+                        var flags = reader.ReadInt32();
 
-                        // Store lump info for later loading
-                        lumps[lumpName] = new byte[lumpSize];
-                    }
-
-                    // Read lump data
-                    foreach (var lump in lumps)
-                    {
-                        var lumpName = lump.Key;
-                        var lumpData = lump.Value;
-                        
-                        // Find lump info in directory
-                        stream.Position = headerSize;
-                        for (int i = 0; i < lumpCount; i++)
+                        if (name == lumpName)
                         {
-                            var name = ReadFixedString(reader, 32);
-                            var offset = reader.ReadInt32();
-                            var size = reader.ReadInt32();
-                            var flags = reader.ReadInt32();
-
-                            if (name == lumpName)
-                            {
-                                // Read lump data
-                                var currentPos = stream.Position;
-                                stream.Position = offset;
-                                var data = reader.ReadBytes(size);
-                                lumps[lumpName] = data;
-                                stream.Position = currentPos;
-                                break;
-                            }
+                            // Read lump data
+                            var currentPos = stream.Position;
+                            stream.Position = offset;
+                            var data = reader.ReadBytes(size);
+                            lumps[lumpName] = data;
+                            stream.Position = currentPos;
+                            break;
                         }
                     }
                 }
 
                 isLoaded = true;
-                Console.WriteLine($"Loaded {lumps.Count} lumps from file: {filePath}");
+                Console.WriteLine($"Loaded {lumps.Count} lumps from modern RPG file");
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to load from file: {ex.Message}");
+                Console.WriteLine($"Failed to load modern RPG format: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Load old engine lumped format (like the original OHRRPGCE)
+        /// </summary>
+        private bool LoadOldLumpedFormat(BinaryReader reader)
+        {
+            try
+            {
+                Console.WriteLine("Loading old engine lumped format...");
+                
+                var stream = reader.BaseStream;
+                var lumpCount = 0;
+
+                while (stream.Position < stream.Length)
+                {
+                    // Read lump name (null-terminated string)
+                    var lumpName = "";
+                    var byteValue = reader.ReadByte();
+                    
+                    while (byteValue != 0 && stream.Position < stream.Length)
+                    {
+                        lumpName += (char)byteValue;
+                        byteValue = reader.ReadByte();
+                    }
+
+                    if (string.IsNullOrEmpty(lumpName))
+                        break; // End of lumps
+
+                    // Read lump size (4 bytes, little-endian)
+                    var lumpSizeBytes = reader.ReadBytes(4);
+                    var lumpSize = BitConverter.ToInt32(lumpSizeBytes, 0);
+
+                    if (lumpSize < 0 || lumpSize > stream.Length || stream.Position + lumpSize > stream.Length)
+                    {
+                        Console.WriteLine($"Invalid lump size: {lumpSize} for lump: {lumpName}");
+                        break;
+                    }
+
+                    // Read lump data
+                    var lumpData = reader.ReadBytes(lumpSize);
+                    lumps[lumpName] = lumpData;
+                    lumpCount++;
+
+                    Console.WriteLine($"Loaded lump: {lumpName} ({lumpSize} bytes)");
+                }
+
+                isLoaded = true;
+                Console.WriteLine($"Loaded {lumpCount} lumps from old lumped format");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to load old lumped format: {ex.Message}");
                 return false;
             }
         }
