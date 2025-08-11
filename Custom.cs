@@ -6,6 +6,7 @@ using OHRRPGCEDX.Graphics;
 using OHRRPGCEDX.UI;
 using OHRRPGCEDX.Utils;
 using OHRRPGCEDX.Input;
+using System.IO;
 
 namespace OHRRPGCEDX
 {
@@ -15,14 +16,16 @@ namespace OHRRPGCEDX
         private GraphicsSystem graphicsSystem;
         private InputSystem inputSystem;
         private LoggingSystem loggingSystem;
+        private FileBrowser fileBrowser;
+        private FileBrowserRenderer fileBrowserRenderer;
         
         // Version information (similar to old engine)
         private const string SHORT_VERSION = "OHRRPGCE Custom Editor";
         private const string VERSION_CODENAME = "WIP";
         private const string VERSION_DATE = "2024";
         private const string VERSION_REVISION = "1";
-        private const string GFX_BACKEND = "sdl2";
-        private const string MUSIC_BACKEND = "sdl2";
+        private const string GFX_BACKEND = "SharpDX";
+        private const string MUSIC_BACKEND = "XAudio";
         
         // Main editor menu options (matching old engine's main_editor_menu)
         private List<string> startupMenuOptions = new List<string>
@@ -62,6 +65,7 @@ namespace OHRRPGCEDX
         private bool isRunning = true;
         private bool showHelpText = false;
         private bool showingStartupMenu = true; // Start with startup menu
+        private bool showingFileBrowser = false; // Show file browser for loading games
 
         public Custom()
         {
@@ -143,6 +147,10 @@ namespace OHRRPGCEDX
                 // Set up main menu items
                 SetupMainMenu();
 
+                // Initialize file browser system
+                fileBrowser = new FileBrowser();
+                fileBrowserRenderer = new FileBrowserRenderer(fileBrowser, graphicsSystem);
+
                 loggingSystem?.Info("Custom", "All systems initialized successfully");
             }
             catch (Exception ex)
@@ -157,13 +165,13 @@ namespace OHRRPGCEDX
         /// </summary>
         private void SetupMainMenu()
         {
-            // Set up menu options
+            // Set up menu options to match original engine appearance
             var menuOptions = new UI.MenuOptions
             {
-                edged = true,
-                centered = true,
-                show_numbers = true,
-                max_width = 0
+                edged = false,           // No border around menu (like original engine)
+                centered = false,        // Left-aligned (not centered)
+                show_numbers = false,    // No item numbers
+                max_width = 0            // Auto-width
             };
             menuSystem.SetOptions(menuOptions);
             
@@ -220,6 +228,10 @@ namespace OHRRPGCEDX
                 {
                     RenderStartupMenu();
                 }
+                else if (showingFileBrowser)
+                {
+                    RenderFileBrowser();
+                }
                 else
                 {
                     RenderEditorMenu();
@@ -239,26 +251,26 @@ namespace OHRRPGCEDX
 
         private void RenderStartupMenu()
         {
-            // Draw title "O.H.R.RPG.C.E" at the top center
+            // Draw title "O.H.R.RPG.C.E" at the top-left (matching original engine positioning)
             string title = "O.H.R.RPG.C.E";
-            graphicsSystem.DrawText(title, 400, 80, System.Drawing.Color.DarkBlue, Graphics.TextAlignment.Center);
+            graphicsSystem.DrawText(title, 4, 4, System.Drawing.Color.DarkBlue, Graphics.TextAlignment.Left);
             
-            // Draw menu options
+            // Draw menu options starting below title (matching original engine layout)
             for (int i = 0; i < startupMenuOptions.Count; i++)
             {
                 var option = startupMenuOptions[i];
                 var color = (i == selectedStartupMenuIndex) ? System.Drawing.Color.Yellow : System.Drawing.Color.LightGray;
-                var yPos = 200 + (i * 40);
+                var yPos = 40 + (i * 20); // Compact spacing like original engine
                 
-                graphicsSystem.DrawText(option, 400, yPos, color, Graphics.TextAlignment.Center);
+                graphicsSystem.DrawText(option, 4, yPos, color, Graphics.TextAlignment.Left);
             }
             
-            // Draw footer text
+            // Draw footer text at bottom (matching original engine footer positioning)
             string versionInfo = "OHRRPGCE kaleidophone+1 20250810 sdl2/sd12";
             string helpText = "Press F1 for help on any menu!";
             
-            graphicsSystem.DrawText(versionInfo, 400, 500, System.Drawing.Color.LightGray, Graphics.TextAlignment.Center);
-            graphicsSystem.DrawText(helpText, 400, 530, System.Drawing.Color.LightGray, Graphics.TextAlignment.Center);
+            graphicsSystem.DrawText(versionInfo, 4, graphicsSystem.ScreenHeight - 40, System.Drawing.Color.LightGray, Graphics.TextAlignment.Left);
+            graphicsSystem.DrawText(helpText, 4, graphicsSystem.ScreenHeight - 20, System.Drawing.Color.LightGray, Graphics.TextAlignment.Left);
         }
 
         private void RenderEditorMenu()
@@ -267,35 +279,41 @@ namespace OHRRPGCEDX
             string title = $"{SHORT_VERSION} v{VERSION_REVISION} ({VERSION_CODENAME})";
             string subtitle = $"Built {VERSION_DATE} - {GFX_BACKEND} graphics, {MUSIC_BACKEND} music";
             
-            // Draw title text
-            graphicsSystem.DrawText(title, 400, 50, System.Drawing.Color.White, Graphics.TextAlignment.Center);
-            graphicsSystem.DrawText(subtitle, 400, 80, System.Drawing.Color.Gray, Graphics.TextAlignment.Center);
+            // Draw title text at top-left (matching original engine positioning)
+            graphicsSystem.DrawText(title, 4, 4, System.Drawing.Color.White, Graphics.TextAlignment.Left);
+            graphicsSystem.DrawText(subtitle, 4, 24, System.Drawing.Color.Gray, Graphics.TextAlignment.Left);
 
-            // Draw some test rectangles to verify rendering is working
-            graphicsSystem.FillRectangle(50, 150, 100, 50, System.Drawing.Color.Blue);
-            graphicsSystem.DrawRectangle(50, 150, 100, 50, System.Drawing.Color.White, 2.0f);
-            
-            graphicsSystem.FillRectangle(200, 150, 100, 50, System.Drawing.Color.Red);
-            graphicsSystem.DrawRectangle(200, 150, 100, 50, System.Drawing.Color.White, 2.0f);
-            
-            graphicsSystem.FillRectangle(350, 150, 100, 50, System.Drawing.Color.Green);
-            graphicsSystem.DrawRectangle(350, 150, 100, 50, System.Drawing.Color.White, 2.0f);
-            
-            // Draw some test lines
-            graphicsSystem.DrawLine(50, 250, 450, 250, System.Drawing.Color.Yellow, 3.0f);
-            graphicsSystem.DrawLine(50, 280, 450, 280, System.Drawing.Color.Orange, 2.0f);
-
-            // Render the menu using MenuSystem
+            // Render the menu using MenuSystem below the title (matching original engine)
             if (menuSystem != null)
             {
+                // Set menu options to match original engine behavior
+                var menuOptions = new MenuOptions
+                {
+                    edged = false,           // No border around menu
+                    centered = false,        // Left-aligned (not centered)
+                    show_numbers = false,    // No item numbers
+                    max_width = 0            // Auto-width
+                };
+                menuSystem.SetOptions(menuOptions);
+                
+                // Position menu below title text (around y=50) like original engine
+                // The MenuSystem will handle the actual rendering at the correct position
                 menuSystem.Render(graphicsSystem);
             }
 
-            // Draw help text if requested
+            // Draw help text at bottom (matching original engine footer positioning)
             if (showHelpText)
             {
                 string helpText = "Use arrow keys to navigate, Enter to select, F1 for help";
-                graphicsSystem.DrawText(helpText, 400, 550, System.Drawing.Color.Gray, Graphics.TextAlignment.Center);
+                graphicsSystem.DrawText(helpText, 4, graphicsSystem.ScreenHeight - 20, System.Drawing.Color.Gray, Graphics.TextAlignment.Left);
+            }
+        }
+
+        private void RenderFileBrowser()
+        {
+            if (fileBrowserRenderer != null)
+            {
+                fileBrowserRenderer.Render();
             }
         }
 
@@ -308,6 +326,10 @@ namespace OHRRPGCEDX
                 if (showingStartupMenu)
                 {
                     ProcessStartupMenuInput();
+                }
+                else if (showingFileBrowser)
+                {
+                    ProcessFileBrowserInput();
                 }
                 else
                 {
@@ -378,7 +400,7 @@ namespace OHRRPGCEDX
                 showingStartupMenu = true;
                 // Reset key repeat timing when switching menus
                 inputSystem.ResetAllKeyRepeat();
-                loggingSystem?.Info("Custom", "Returning to startup menu");
+                loggingSystem?.Info("Custom", "Starting file browser for loading game");
             }
             else if (inputSystem.IsKeyPressed(Keys.F1))
             {
@@ -388,6 +410,65 @@ namespace OHRRPGCEDX
 
             // Update the selected menu index to match MenuSystem
             selectedMenuIndex = menuSystem.GetSelectedIndex();
+        }
+
+        private void ProcessFileBrowserInput()
+        {
+            if (fileBrowser == null) return;
+
+            // Handle input for file browser navigation
+            if (inputSystem.IsKeyJustPressed(Keys.Up) || inputSystem.ShouldKeyRepeat(Keys.Up))
+            {
+                fileBrowser.MoveUp();
+            }
+            else if (inputSystem.IsKeyJustPressed(Keys.Down) || inputSystem.ShouldKeyRepeat(Keys.Down))
+            {
+                fileBrowser.MoveDown();
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Enter))
+            {
+                // Navigate to selected entry or select file
+                if (fileBrowser.NavigateToSelected())
+                {
+                    // File was selected, load it and go to editor
+                    string selectedPath = fileBrowser.GetSelectedPath();
+                    if (!string.IsNullOrEmpty(selectedPath))
+                    {
+                        loggingSystem?.Info("Custom", $"Selected RPG file: {selectedPath}");
+                        // TODO: Load the RPG file here
+                        MessageBox.Show($"Selected RPG file: {selectedPath}\n\nFile loading functionality will be implemented next.", 
+                            "File Selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        
+                        // Go to editor menu
+                        showingFileBrowser = false;
+                        showingStartupMenu = false;
+                        inputSystem.ResetAllKeyRepeat();
+                    }
+                }
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Escape))
+            {
+                // Go back to startup menu
+                showingFileBrowser = false;
+                showingStartupMenu = true;
+                inputSystem.ResetAllKeyRepeat();
+                loggingSystem?.Info("Custom", "Returning to startup menu from file browser");
+            }
+            else if (inputSystem.IsKeyPressed(Keys.Back))
+            {
+                // Go up a directory
+                fileBrowser.GoUpDirectory();
+            }
+            else if (inputSystem.IsKeyPressed(Keys.F5))
+            {
+                // Refresh file listing
+                fileBrowser.Refresh();
+            }
+            else if (inputSystem.IsKeyPressed(Keys.F1))
+            {
+                // Toggle help text
+                showHelpText = !showHelpText;
+            }
         }
 
         private void ExecuteStartupMenuSelection()
@@ -408,12 +489,22 @@ namespace OHRRPGCEDX
                         loggingSystem?.Info("Custom", "Switching to editor menu for new game");
                         break;
                     case 1: // LOAD EXISTING GAME
-                        // For now, just switch to editor menu
-                        // In a real implementation, this would load an existing game file
+                        // Start file browser for loading RPG files
                         showingStartupMenu = false;
+                        showingFileBrowser = true;
+                        
+                        // Initialize file browser to the bin/Debug/net48 directory where the test RPG file is located
+                        string defaultPath = Path.Combine(Application.StartupPath, "bin", "Debug", "net48");
+                        if (!Directory.Exists(defaultPath))
+                        {
+                            // Fallback to current directory if the expected path doesn't exist
+                            defaultPath = Environment.CurrentDirectory;
+                        }
+                        fileBrowser.Initialize(FileBrowser.BrowseFileType.RPG, defaultPath);
+                        
                         // Reset key repeat timing when switching menus
                         inputSystem.ResetAllKeyRepeat();
-                        loggingSystem?.Info("Custom", "Switching to editor menu for existing game");
+                        loggingSystem?.Info("Custom", "Starting file browser for loading existing game");
                         break;
                     case 2: // EXIT PROGRAM
                         isRunning = false;

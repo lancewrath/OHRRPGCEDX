@@ -276,9 +276,16 @@ namespace OHRRPGCEDX.UI
                 int screenWidth = graphicsSystem.ScreenWidth;
                 int screenHeight = graphicsSystem.ScreenHeight;
 
-                // Calculate menu position
-                int menuX = options.centered ? (screenWidth - menu_width) / 2 : 50;
-                int menuY = options.centered ? (screenHeight - menu_height) / 2 : 50;
+                // Calculate menu position - use top-left positioning like original engine
+                int menuX = options.centered ? (screenWidth - menu_width) / 2 : 4; // Default to 4 (like pMenuX)
+                int menuY = options.centered ? (screenHeight - menu_height) / 2 : 4; // Default to 4 (like pMenuY)
+                
+                // For editor menu, position below title text (around y=50)
+                // For startup menu, keep at top-left (y=4)
+                if (items.Count > 20) // Editor menu has more items than startup menu
+                {
+                    menuY = 50; // Position below title text
+                }
 
                 // Draw menu background
                 if (options.edged)
