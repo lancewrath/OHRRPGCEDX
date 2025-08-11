@@ -80,6 +80,7 @@ namespace OHRRPGCEDX.UI
 
         public void BuildListing()
         {
+            var startTime = DateTime.Now;
             entries.Clear();
             selectedIndex = 0;
 
@@ -137,6 +138,7 @@ namespace OHRRPGCEDX.UI
                 // Add subdirectories
                 try
                 {
+                    var dirStartTime = DateTime.Now;
                     var directories = Directory.GetDirectories(currentDirectory)
                         .Where(d => !showHidden || !IsHidden(d))
                         .OrderBy(d => Path.GetFileName(d));
@@ -152,8 +154,14 @@ namespace OHRRPGCEDX.UI
                             FullPath = dir
                         });
                     }
+                    var dirTime = DateTime.Now - dirStartTime;
+                    if (dirTime.TotalMilliseconds > 100) // Log if directory scanning takes more than 100ms
+                    {
+                        Console.WriteLine($"Directory scanning took {dirTime.TotalMilliseconds}ms for {currentDirectory}");
+                    }
 
                     // Add files based on file type
+                    var fileStartTime = DateTime.Now;
                     var files = GetFilesByType(currentDirectory);
                     foreach (string file in files)
                     {
@@ -165,6 +173,11 @@ namespace OHRRPGCEDX.UI
                             Caption = fileName,
                             FullPath = file
                         });
+                    }
+                    var fileTime = DateTime.Now - fileStartTime;
+                    if (fileTime.TotalMilliseconds > 100) // Log if file scanning takes more than 100ms
+                    {
+                        Console.WriteLine($"File scanning took {fileTime.TotalMilliseconds}ms for {currentDirectory}");
                     }
                 }
                 catch (Exception ex)
@@ -185,6 +198,12 @@ namespace OHRRPGCEDX.UI
                         break;
                     }
                 }
+            }
+
+            var totalTime = DateTime.Now - startTime;
+            if (totalTime.TotalMilliseconds > 50) // Log if total build takes more than 50ms
+            {
+                Console.WriteLine($"BuildListing took {totalTime.TotalMilliseconds}ms for {currentDirectory}, found {entries.Count} entries");
             }
         }
 

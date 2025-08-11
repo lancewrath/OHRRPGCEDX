@@ -264,40 +264,40 @@ namespace OHRRPGCEDX.Game
             {
                 case Keys.D1:
                     currentState = GameState.Loading;
-                    Console.WriteLine("Switched to Loading state");
+                    loggingSystem?.Info("Game Runtime", "Switched to Loading state");
                     break;
                 case Keys.D2:
                     currentState = GameState.MainMenu;
-                    Console.WriteLine("Switched to Main Menu state");
+                    loggingSystem?.Info("Game Runtime", "Switched to Main Menu state");
                     break;
                 case Keys.D3:
                     currentState = GameState.Playing;
-                    Console.WriteLine("Switched to Playing state");
+                    loggingSystem?.Info("Game Runtime", "Switched to Playing state");
                     break;
                 case Keys.D4:
                     currentState = GameState.Paused;
-                    Console.WriteLine("Switched to Paused state");
+                    loggingSystem?.Info("Game Runtime", "Switched to Paused state");
                     break;
                 case Keys.D5:
                     currentState = GameState.Battle;
-                    Console.WriteLine("Switched to Battle state");
+                    loggingSystem?.Info("Game Runtime", "Switched to Battle state");
                     break;
                 case Keys.D6:
                     currentState = GameState.Menu;
-                    Console.WriteLine("Switched to Menu state");
+                    loggingSystem?.Info("Game Runtime", "Switched to Menu state");
                     break;
                 case Keys.D7:
                     currentState = GameState.Dialog;
-                    Console.WriteLine("Switched to Dialog state");
+                    loggingSystem?.Info("Game Runtime", "Switched to Dialog state");
                     break;
                 case Keys.D8:
                     currentState = GameState.GameOver;
-                    Console.WriteLine("Switched to Game Over state");
+                    loggingSystem?.Info("Game Runtime", "Switched to Game Over state");
                     break;
                 case Keys.D9:
                     currentState = GameState.FileBrowser;
                     ShowFileBrowser();
-                    Console.WriteLine("Switched to File Browser state");
+                    loggingSystem?.Info("Game Runtime", "Switched to File Browser state");
                     break;
             }
         }
@@ -324,99 +324,27 @@ namespace OHRRPGCEDX.Game
         
         private void OnGameTimerTick(object sender, EventArgs e)
         {
-            try
+            if (isRunning && !this.IsDisposed && graphicsSystem != null && graphicsSystem.IsInitialized)
             {
-                if (isRunning && graphicsSystem != null && graphicsSystem.IsInitialized)
-                {
-                    // Only update if enough time has passed (frame rate limiting)
-                    double currentTime = DateTime.Now.Ticks / TimeSpan.TicksPerSecond;
-                    double deltaTime = currentTime - (lastFrameTime.Ticks / TimeSpan.TicksPerSecond);
-                    
-                    if (deltaTime >= 0.016) // ~60 FPS for better responsiveness
-                    {
-                        Update();
-                        lastFrameTime = DateTime.Now;
-                    }
-                }
+                // Update input system first (like Custom.cs)
+                inputSystem?.Update();
+                
+                // Render current state with proper Direct2D calls (like Custom.cs)
+                RenderCurrentState();
+                
+                // Process input for current state (like Custom.cs)
+                UpdateCurrentState(0.016);
             }
-            catch (Exception ex)
+            else
             {
-                loggingSystem?.Error("Game Runtime", $"Game timer tick error: {ex}");
+                gameTimer?.Stop();
             }
         }
         
         private void Update()
         {
-            try
-            {
-                if (graphicsSystem == null || !graphicsSystem.IsInitialized)
-                {
-                    return;
-                }
-
-                // Update input system
-                inputSystem?.Update();
-                
-                // Update current game state
-                UpdateCurrentState(0.016); // Use fixed delta time for now
-                
-                // Render the frame
-                RenderFrame();
-                
-            }
-            catch (Exception ex)
-            {
-                loggingSystem?.Error("Game Runtime", $"Update error: {ex}");
-            }
-        }
-        
-        private void RenderFrame()
-        {
-            try
-            {
-                if (graphicsSystem == null || !graphicsSystem.IsInitialized)
-                {
-                    return;
-                }
-
-                // Prevent multiple simultaneous renders
-                if (isRendering)
-                {
-                    return;
-                }
-
-                isRendering = true;
-
-                // Remove artificial delay - it's not needed and slows down performance
-                // System.Threading.Thread.Sleep(1);
-
-                graphicsSystem.BeginScene();
-                
-                // Render current game state
-                RenderCurrentState();
-                
-                // Render UI overlays
-                if (currentState != GameState.Loading)
-                {
-                    // menuSystem?.Render(); // Commented out until MenuSystem.Render is implemented
-                }
-                
-                graphicsSystem.EndScene();
-                graphicsSystem.Present();
-                
-            }
-            catch (SharpDX.SharpDXException sdxEx)
-            {
-                loggingSystem?.Error("Game Runtime", $"SharpDX render error: {sdxEx}");
-            }
-            catch (Exception ex)
-            {
-                loggingSystem?.Error("Game Runtime", $"Render error: {ex}");
-            }
-            finally
-            {
-                isRendering = false;
-            }
+            // This method is no longer needed - updates are handled directly in OnGameTimerTick
+            // like Custom.cs does for better performance
         }
         
         private void UpdateCurrentState(double deltaTime)
@@ -455,35 +383,59 @@ namespace OHRRPGCEDX.Game
         
         private void RenderCurrentState()
         {
-            switch (currentState)
+            if (graphicsSystem == null || !graphicsSystem.IsInitialized)
             {
-                case GameState.Loading:
-                    RenderLoading();
-                    break;
-                case GameState.MainMenu:
-                    RenderMainMenu();
-                    break;
-                case GameState.FileBrowser:
-                    RenderFileBrowser();
-                    break;
-                case GameState.Playing:
-                    RenderPlaying();
-                    break;
-                case GameState.Paused:
-                    RenderPaused();
-                    break;
-                case GameState.Battle:
-                    RenderBattle();
-                    break;
-                case GameState.Menu:
-                    RenderMenu();
-                    break;
-                case GameState.Dialog:
-                    RenderDialog();
-                    break;
-                case GameState.GameOver:
-                    RenderGameOver();
-                    break;
+                return;
+            }
+
+            try
+            {
+                // Begin Direct2D rendering (like Custom.cs)
+                graphicsSystem.BeginScene();
+                
+                // Clear the screen first
+                graphicsSystem.Clear(Color.FromArgb(255, 0, 0, 0));
+                
+                // Render current game state
+                switch (currentState)
+                {
+                    case GameState.Loading:
+                        RenderLoading();
+                        break;
+                    case GameState.MainMenu:
+                        RenderMainMenu();
+                        break;
+                    case GameState.FileBrowser:
+                        RenderFileBrowser();
+                        break;
+                    case GameState.Playing:
+                        RenderPlaying();
+                        break;
+                    case GameState.Paused:
+                        RenderPaused();
+                        break;
+                    case GameState.Battle:
+                        RenderBattle();
+                        break;
+                    case GameState.Menu:
+                        RenderMenu();
+                        break;
+                    case GameState.Dialog:
+                        RenderDialog();
+                        break;
+                    case GameState.GameOver:
+                        RenderGameOver();
+                        break;
+                }
+                
+                // End Direct2D rendering and present (like Custom.cs)
+                graphicsSystem.EndScene();
+                graphicsSystem.Present();
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't crash the rendering loop
+                loggingSystem?.Error("Game Runtime", $"Render error: {ex.Message}");
             }
         }
         
@@ -1100,13 +1052,41 @@ namespace OHRRPGCEDX.Game
         {
             currentState = GameState.FileBrowser;
             
-            // Use the exact same path initialization logic as Custom.cs for consistent behavior
-            string defaultPath = Path.Combine(Application.StartupPath, "bin", "Debug", "net48");
-            if (!Directory.Exists(defaultPath))
+            // Use a more reliable path initialization approach
+            string defaultPath;
+            
+            // Try multiple fallback paths for better file browsing
+            if (Directory.Exists(Application.StartupPath))
             {
-                // Fallback to current directory if the expected path doesn't exist
-                defaultPath = Environment.CurrentDirectory;
+                defaultPath = Application.StartupPath;
+                loggingSystem?.Info("Game Runtime", $"Using StartupPath: {defaultPath}");
             }
+            else if (Directory.Exists(Environment.CurrentDirectory))
+            {
+                defaultPath = Environment.CurrentDirectory;
+                loggingSystem?.Info("Game Runtime", $"Using CurrentDirectory: {defaultPath}");
+            }
+            else if (Directory.Exists("C:\\"))
+            {
+                defaultPath = "C:\\";
+                loggingSystem?.Info("Game Runtime", $"Using C:\\ fallback: {defaultPath}");
+            }
+            else
+            {
+                defaultPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                loggingSystem?.Info("Game Runtime", $"Using Desktop fallback: {defaultPath}");
+            }
+            
+            // Log the final path being used
+            loggingSystem?.Info("Game Runtime", $"File browser initializing with path: {defaultPath}");
+            
+            // Show debug information to user
+            string debugInfo = $"StartupPath: {Application.StartupPath}\n" +
+                             $"CurrentDirectory: {Environment.CurrentDirectory}\n" +
+                             $"Selected Path: {defaultPath}\n" +
+                             $"Path Exists: {Directory.Exists(defaultPath)}";
+            MessageBox.Show(debugInfo, "File Browser Debug Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            
             fileBrowser.Initialize(FileBrowser.BrowseFileType.RPG, defaultPath);
             
             loggingSystem?.Info("Game Runtime", "File browser started");
