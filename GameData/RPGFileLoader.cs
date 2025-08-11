@@ -47,13 +47,13 @@ namespace OHRRPGCEDX.GameData
                 }
                 else
                 {
-                    Console.WriteLine($"Invalid RPG path: {path}");
+                    OHRRPGCEDX.Utils.LoggingSystem.Instance.Error("RPG Loading", $"Invalid RPG path: {path}");
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to load RPG: {ex.Message}");
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Error("RPG Loading", $"Failed to load RPG: {ex.Message}");
                 return false;
             }
         }
@@ -228,38 +228,140 @@ namespace OHRRPGCEDX.GameData
         {
             try
             {
-                Console.WriteLine("Loading old engine lumped format...");
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("RPG Loading", "Loading old engine lumped format...");
                 
                 var stream = reader.BaseStream;
                 var lumpCount = 0;
+                var startPosition = stream.Position;
+
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("RPG Loading", $"Starting lump parsing at position {startPosition}, stream length: {stream.Length}");
 
                 while (stream.Position < stream.Length)
                 {
-                    // Read lump name (null-terminated string)
-                    var lumpName = "";
-                    var byteValue = reader.ReadByte();
+                    var lumpStartPosition = stream.Position;
                     
-                    while (byteValue != 0 && stream.Position < stream.Length)
+                    OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Starting to read lump at position {lumpStartPosition}, remaining bytes: {stream.Length - stream.Position}");
+                    
+                    // Read lump name (null-terminated string, max 50 characters as per documentation)
+                    var lumpNameBytes = new List<byte>();
+                    var maxNameLength = 50;
+                    var nameLength = 0;
+                    var foundNullTerminator = false;
+                    
+                    // Read up to 50 bytes or until null terminator
+                    while (nameLength < maxNameLength && stream.Position < stream.Length)
                     {
-                        lumpName += (char)byteValue;
-                        byteValue = reader.ReadByte();
+                        var byteValue = reader.ReadByte();
+                        if (byteValue == 0)
+                        {
+                            foundNullTerminator = true;
+                            break;
+                        }
+                        
+                        lumpNameBytes.Add(byteValue);
+                        nameLength++;
                     }
-
-                    if (string.IsNullOrEmpty(lumpName))
-                        break; // End of lumps
-
-                    // Read lump size (4 bytes, PDP-endian byte order = 3,4,1,2)
-                    var byte1 = reader.ReadByte(); // Byte 1 -> bits 16-23
-                    var byte2 = reader.ReadByte(); // Byte 2 -> bits 24-31
-                    var byte3 = reader.ReadByte(); // Byte 3 -> bits 0-7
-                    var byte4 = reader.ReadByte(); // Byte 4 -> bits 8-15
                     
-                    var lumpSize = (byte1 << 16) | (byte2 << 24) | byte3 | (byte4 << 8);
+                    // Check if we hit the end of stream without finding a null terminator
+                    if (stream.Position >= stream.Length)
+                    {
+                        if (nameLength == maxNameLength)
+                        {
+                            OHRRPGCEDX.Utils.LoggingSystem.Instance.Warning("RPG Loading", $"Reached end of stream while reading lump name at position {lumpStartPosition} (name length: {nameLength})");
+                        }
+                        else
+                        {
+                            OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("RPG Loading", $"Reached end of stream at position {stream.Position}");
+                        }
+                        break;
+                    }
+                    
+                    // If we didn't find a null terminator and read exactly 50 characters, this might be a fixed-length name
+                    if (!foundNullTerminator && nameLength == maxNameLength)
+                    {
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Lump name at position {lumpStartPosition} is exactly {maxNameLength} characters without null terminator - treating as fixed-length");
+                    }
+                    
+                    // Convert to string and validate
+                    var lumpName = Encoding.ASCII.GetString(lumpNameBytes.ToArray());
+                    
+                    // Validate the lump name contains only printable ASCII characters
+                    if (string.IsNullOrEmpty(lumpName) || !lumpName.All(c => c >= 32 && c <= 126))
+                    {
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Warning("RPG Loading", $"Invalid lump name at position {lumpStartPosition}: '{lumpName}' (contains non-printable characters)");
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Raw bytes: {BitConverter.ToString(lumpNameBytes.ToArray())}");
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Context: {DumpBytesAroundPosition(stream, lumpStartPosition)}");
+                        
+                        // Try to recover stream position by looking for the next valid lump
+                        if (TryRecoverStreamPosition(stream, lumpStartPosition, out var recoveredPosition))
+                        {
+                            stream.Position = recoveredPosition;
+                            continue;
+                        }
+                        else
+                        {
+                            // If recovery failed, just move forward one byte
+                            var scanPosition = lumpStartPosition + 1;
+                            if (scanPosition < stream.Length)
+                            {
+                                stream.Position = scanPosition;
+                                continue;
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Check if we've reached the end of lumps (empty name)
+                    if (string.IsNullOrEmpty(lumpName))
+                    {
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("RPG Loading", $"Reached end of lumps at position {lumpStartPosition}");
+                        break;
+                    }
+                    
+                    // Read lump size (4 bytes, PDP-endian format = two little-endian unsigned 16-bit integers)
+                    if (stream.Position + 4 > stream.Length)
+                    {
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Warning("RPG Loading", $"Insufficient bytes remaining for lump size at position {stream.Position}");
+                        break;
+                    }
+                    
+                    // size = losize | (hisize << 16)
+                    var losize = reader.ReadUInt16(); // Low 16 bits (little-endian)
+                    var hisize = reader.ReadUInt16(); // High 16 bits (little-endian)
+                    var lumpSize = losize | (hisize << 16);
+                    
+                    OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Lump: {lumpName}, Size: {lumpSize} (losize: {losize}, hisize: {hisize}), Position: {stream.Position}");
 
+                    // Validate lump size
                     if (lumpSize < 0 || lumpSize > stream.Length || stream.Position + lumpSize > stream.Length)
                     {
-                        Console.WriteLine($"Invalid lump size: {lumpSize} for lump: {lumpName}");
-                        break;
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Warning("RPG Loading", $"Invalid lump size: {lumpSize} for lump: {lumpName} at position {lumpStartPosition}");
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Stream position: {stream.Position}, Stream length: {stream.Length}, Remaining bytes: {stream.Length - stream.Position}");
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Context: {DumpBytesAroundPosition(stream, lumpStartPosition)}");
+                        
+                        // Try to recover stream position by looking for the next valid lump
+                        if (TryRecoverStreamPosition(stream, lumpStartPosition, out var recoveredPosition))
+                        {
+                            stream.Position = recoveredPosition;
+                            continue;
+                        }
+                        else
+                        {
+                            // If recovery failed, just move forward one byte
+                            var scanPosition = lumpStartPosition + 1;
+                            if (scanPosition < stream.Length)
+                            {
+                                stream.Position = scanPosition;
+                                continue;
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
                     }
 
                     // Read lump data
@@ -267,16 +369,67 @@ namespace OHRRPGCEDX.GameData
                     lumps[lumpName] = lumpData;
                     lumpCount++;
 
-                    Console.WriteLine($"Loaded lump: {lumpName} ({lumpSize} bytes)");
+                    OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("RPG Loading", $"Loaded lump: {lumpName} ({lumpSize} bytes) at position {lumpStartPosition}");
+                    OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"After reading lump data, stream position: {stream.Position}, remaining bytes: {stream.Length - stream.Position}");
+                    
+                    // Special debugging for BROWSE.TXT since it's the first lump that loads successfully
+                    if (lumpName.Equals("BROWSE.TXT", StringComparison.OrdinalIgnoreCase))
+                    {
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"BROWSE.TXT loaded successfully. Lump size: {lumpSize}, Final stream position: {stream.Position}");
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"BROWSE.TXT data preview: {BitConverter.ToString(lumpData.Take(Math.Min(32, lumpData.Length)).ToArray())}");
+                        
+                        // Look ahead to see what comes next
+                        if (stream.Position < stream.Length)
+                        {
+                            var lookAheadBytes = new byte[Math.Min(16, stream.Length - stream.Position)];
+                            var bytesRead = stream.Read(lookAheadBytes, 0, lookAheadBytes.Length);
+                            stream.Position -= bytesRead; // Restore position
+                            
+                            OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Bytes after BROWSE.TXT: {BitConverter.ToString(lookAheadBytes, 0, bytesRead)}");
+                        }
+                    }
+                    
+                    // After reading lump data, verify we're at a reasonable position for the next lump
+                    // Some lumps might have padding or alignment requirements
+                    if (stream.Position < stream.Length)
+                    {
+                        // Check if we're properly aligned for the next lump
+                        if (!IsStreamAlignedForNextLump(stream, stream.Position))
+                        {
+                            OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Stream not aligned after lump '{lumpName}', attempting to find next aligned position");
+                            
+                            if (TryFindNextAlignedPosition(stream, stream.Position, out var alignedPosition))
+                            {
+                                stream.Position = alignedPosition;
+                                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("RPG Loading", $"Repositioned stream to aligned position {alignedPosition} after lump '{lumpName}'");
+                            }
+                            else
+                            {
+                                OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Could not find aligned position after lump '{lumpName}', continuing from current position");
+                            }
+                        }
+                        else
+                        {
+                            OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Stream properly aligned after lump '{lumpName}'");
+                        }
+                    }
+                    
+                    // Safety check: if we've loaded too many lumps, something might be wrong
+                    if (lumpCount > 1000)
+                    {
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Warning("RPG Loading", $"Loaded {lumpCount} lumps, which seems excessive. Stopping to prevent infinite loop.");
+                        break;
+                    }
                 }
 
                 isLoaded = true;
-                Console.WriteLine($"Loaded {lumpCount} lumps from old lumped format");
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("RPG Loading", $"Loaded {lumpCount} lumps from old lumped format. Final stream position: {stream.Position}");
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to load old lumped format: {ex.Message}");
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Error("RPG Loading", $"Failed to load old lumped format: {ex.Message}");
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Error("RPG Loading", $"Stack trace: {ex.StackTrace}");
                 return false;
             }
         }
@@ -323,6 +476,25 @@ namespace OHRRPGCEDX.GameData
         {
             if (string.IsNullOrEmpty(rpgPath))
                 return "GAME";
+            
+            // First, check if ARCHINYM.LMP exists - this contains the internal project name
+            if (isLoaded && HasLump("ARCHINYM.LMP"))
+            {
+                var archinymData = GetLump("ARCHINYM.LMP");
+                if (archinymData != null && archinymData.Length > 0)
+                {
+                    // ARCHINYM.LMP contains the project name as a null-terminated string
+                    var nullIndex = Array.IndexOf(archinymData, (byte)0);
+                    var projectNameLength = nullIndex >= 0 ? nullIndex : archinymData.Length;
+                    var projectName = Encoding.ASCII.GetString(archinymData, 0, projectNameLength).Trim();
+                    
+                    if (!string.IsNullOrEmpty(projectName))
+                    {
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Project Detection", $"GetProjectName: Found ARCHINYM.LMP with project name: '{projectName}'");
+                        return projectName;
+                    }
+                }
+            }
                 
             var fileName = Path.GetFileNameWithoutExtension(rpgPath);
             if (string.IsNullOrEmpty(fileName))
@@ -331,15 +503,15 @@ namespace OHRRPGCEDX.GameData
             // For old engine format, the project name is usually the filename without extension
             // But some games use "GAME" as the default project name
             // Special case: vikings.rpg uses "VIKING" (singular) not "VIKINGS" (plural)
-            var projectName = fileName.ToUpper();
-            if (projectName == "VIKINGS")
+            var fallbackProjectName = fileName.ToUpper();
+            if (fallbackProjectName == "VIKINGS")
             {
-                projectName = "VIKING";
+                fallbackProjectName = "VIKING";
             }
             
-            OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Project Detection", $"GetProjectName: Detected project name: '{projectName}' from path: '{rpgPath}'");
+            OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("Project Detection", $"GetProjectName: Detected project name: '{fallbackProjectName}' from path: '{rpgPath}'");
             
-            return projectName;
+            return fallbackProjectName;
         }
 
         /// <summary>
@@ -3241,6 +3413,221 @@ namespace OHRRPGCEDX.GameData
             }
             
             return availableIds;
+        }
+
+        /// <summary>
+        /// Try to recover stream position by looking for the next valid lump signature
+        /// </summary>
+        private bool TryRecoverStreamPosition(Stream stream, long startPosition, out long newPosition)
+        {
+            try
+            {
+                newPosition = startPosition;
+                var maxScanDistance = 2048; // Increased scan distance
+                var scanPosition = startPosition + 1;
+                
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Attempting to recover stream position starting from {startPosition}, max scan distance: {maxScanDistance}");
+                
+                while (scanPosition < stream.Length && (scanPosition - startPosition) < maxScanDistance)
+                {
+                    stream.Position = scanPosition;
+                    
+                    // Look for a potential lump name start (printable ASCII characters)
+                    var potentialName = new List<byte>();
+                    var nameLength = 0;
+                    var maxNameLength = 50;
+                    var foundNullTerminator = false;
+                    
+                    while (nameLength < maxNameLength && stream.Position < stream.Length)
+                    {
+                        var byteValue = (byte)stream.ReadByte();
+                        if (byteValue == 0)
+                        {
+                            foundNullTerminator = true;
+                            break;
+                        }
+                        
+                        // Check if it's a printable ASCII character
+                        if (byteValue >= 32 && byteValue <= 126)
+                        {
+                            potentialName.Add(byteValue);
+                            nameLength++;
+                        }
+                        else
+                        {
+                            // Not a valid character, try next position
+                            break;
+                        }
+                    }
+                    
+                    // If we found a reasonable name length and null terminator, this might be a valid lump
+                    if (nameLength > 0 && nameLength < maxNameLength && foundNullTerminator && stream.Position < stream.Length)
+                    {
+                        var potentialNameStr = Encoding.ASCII.GetString(potentialName.ToArray());
+                        
+                        // Check if the name looks reasonable (no special characters, reasonable length)
+                        if (potentialNameStr.All(c => char.IsLetterOrDigit(c) || c == '.' || c == '_') && 
+                            potentialNameStr.Length >= 3 && potentialNameStr.Length <= 20)
+                        {
+                            newPosition = scanPosition;
+                            OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("RPG Loading", $"Recovered stream position at {newPosition}, potential lump: {potentialNameStr}");
+                            return true;
+                        }
+                    }
+                    
+                    // Also check for fixed-length names (exactly 50 characters without null terminator)
+                    if (nameLength == maxNameLength && !foundNullTerminator)
+                    {
+                        var potentialNameStr = Encoding.ASCII.GetString(potentialName.ToArray());
+                        
+                        // Check if the name looks reasonable
+                        if (potentialNameStr.All(c => char.IsLetterOrDigit(c) || c == '.' || c == '_') && 
+                            potentialNameStr.Length == 50)
+                        {
+                            newPosition = scanPosition;
+                            OHRRPGCEDX.Utils.LoggingSystem.Instance.Info("RPG Loading", $"Recovered stream position at {newPosition}, potential fixed-length lump: {potentialNameStr}");
+                            return true;
+                        }
+                    }
+                    
+                    scanPosition++;
+                }
+                
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Failed to recover stream position after scanning {maxScanDistance} bytes");
+                newPosition = startPosition;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Warning("RPG Loading", $"Error during stream recovery: {ex.Message}");
+                newPosition = startPosition;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Dump raw bytes around a given position for debugging
+        /// </summary>
+        private string DumpBytesAroundPosition(Stream stream, long position, int bytesBefore = 16, int bytesAfter = 16)
+        {
+            try
+            {
+                var startPos = Math.Max(0, position - bytesBefore);
+                var endPos = Math.Min(stream.Length, position + bytesAfter);
+                var length = (int)(endPos - startPos);
+                
+                if (length <= 0) return "No bytes available";
+                
+                var currentPos = stream.Position;
+                stream.Position = startPos;
+                
+                var bytes = new byte[length];
+                var bytesRead = stream.Read(bytes, 0, length);
+                
+                // Restore original position
+                stream.Position = currentPos;
+                
+                if (bytesRead == 0) return "No bytes read";
+                
+                var hexString = BitConverter.ToString(bytes, 0, bytesRead);
+                var asciiString = Encoding.ASCII.GetString(bytes, 0, bytesRead)
+                    .Select(c => (c >= 32 && c <= 126) ? c : '.')
+                    .ToArray();
+                
+                return $"Position {startPos}-{startPos + bytesRead - 1}: {hexString} | {new string(asciiString)}";
+            }
+            catch (Exception ex)
+            {
+                return $"Error dumping bytes: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Check if the stream position is properly aligned for the next lump
+        /// </summary>
+        private bool IsStreamAlignedForNextLump(Stream stream, long currentPosition)
+        {
+            try
+            {
+                if (currentPosition >= stream.Length - 1)
+                    return false;
+                
+                var originalPosition = stream.Position;
+                stream.Position = currentPosition;
+                
+                // Look ahead a few bytes to see if we have a valid lump signature
+                var lookAheadBytes = new byte[Math.Min(8, stream.Length - currentPosition)];
+                var bytesRead = stream.Read(lookAheadBytes, 0, lookAheadBytes.Length);
+                
+                // Restore position
+                stream.Position = originalPosition;
+                
+                if (bytesRead == 0)
+                    return false;
+                
+                // Check if the first byte is a null terminator (end of previous lump name)
+                if (lookAheadBytes[0] == 0)
+                    return true;
+                
+                // Check if we have printable ASCII characters (potential lump name start)
+                if (lookAheadBytes[0] >= 32 && lookAheadBytes[0] <= 126)
+                {
+                    // Look for a reasonable lump name pattern
+                    var nameLength = 0;
+                    for (int i = 0; i < bytesRead && i < 50; i++)
+                    {
+                        if (lookAheadBytes[i] == 0)
+                            break;
+                        if (lookAheadBytes[i] >= 32 && lookAheadBytes[i] <= 126)
+                            nameLength++;
+                        else
+                            break;
+                    }
+                    
+                    // If we found a reasonable name length, we're probably aligned
+                    return nameLength >= 3 && nameLength <= 20;
+                }
+                
+                return false;
+            }
+            catch (Exception ex)
+            {
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Error checking stream alignment: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Try to find the next aligned position for lump parsing
+        /// </summary>
+        private bool TryFindNextAlignedPosition(Stream stream, long startPosition, out long alignedPosition)
+        {
+            try
+            {
+                alignedPosition = startPosition;
+                var maxSearchDistance = 1024;
+                var searchPosition = startPosition;
+                
+                while (searchPosition < stream.Length && (searchPosition - startPosition) < maxSearchDistance)
+                {
+                    if (IsStreamAlignedForNextLump(stream, searchPosition))
+                    {
+                        alignedPosition = searchPosition;
+                        OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Found aligned position at {alignedPosition}");
+                        return true;
+                    }
+                    searchPosition++;
+                }
+                
+                alignedPosition = startPosition;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                OHRRPGCEDX.Utils.LoggingSystem.Instance.Debug("RPG Loading", $"Error finding aligned position: {ex.Message}");
+                alignedPosition = startPosition;
+                return false;
+            }
         }
     }
 
